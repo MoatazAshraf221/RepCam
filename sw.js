@@ -1,5 +1,5 @@
 // RepCam offline support. Bump the version to force every phone to refresh its saved copy.
-const VERSION='v8', SHELL='repcam-shell-'+VERSION, RUNTIME='repcam-runtime'; // RUNTIME keeps the model across versions
+const VERSION='v9', SHELL='repcam-shell-'+VERSION, RUNTIME='repcam-runtime'; // RUNTIME keeps the model across versions
 const ASSETS=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png'];
 // Fonts and the rep-counting model come from these hosts; they are saved after first use.
 const CDN=['cdn.jsdelivr.net','storage.googleapis.com','fonts.googleapis.com','fonts.gstatic.com'];

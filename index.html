@@ -105,7 +105,8 @@
   details.set[open] .chev{transform:rotate(-135deg);margin-bottom:-4px}
   details.set .stp:last-child{border-bottom:0}
   .hint{font-size:13px;color:var(--mut);display:block}
-  .hrow{display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--line)}
+  .hrow{display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--line);width:100%;text-align:left;background:none;border-radius:0;font-weight:400}
+  .hrow:active:not(:disabled){transform:none;filter:none;background:var(--field)}
   .hdate{flex:none;width:58px;font:600 17px/1.2 var(--disp)}
   .hdate small{display:block;font:400 13px var(--body);color:var(--mut)}
   .hlines{font-size:14px;color:var(--mut)} .hlines b{color:var(--txt);font-weight:600}
@@ -215,6 +216,15 @@
     <div id="settings"></div>
   </details>
 
+  <details class="set" style="margin-top:10px">
+    <summary>Backup<span class="chev"></span></summary>
+    <div style="padding-bottom:14px">
+      <div class="row"><button id="bkSave" class="grow sm">Save backup file</button><button id="bkLoad" class="grow sm">Restore from file</button></div>
+      <div id="bkMsg"></div>
+      <input type="file" id="bkFile" accept="application/json,.json" hidden>
+    </div>
+  </details>
+
   <h2>Recent workouts</h2>
   <div id="history"></div>
   <p class="sub" id="ver" style="margin-top:26px;font-size:13px"></p>
@@ -265,12 +275,15 @@
   <h1 id="sumTitle">Workout done</h1>
   <p class="sub" id="sumSub"></p>
   <div id="sumBody"></div>
-  <h2>Highlight reel</h2>
-  <div class="card" id="reelOpts"></div>
-  <button id="reelBtn" class="pri big">Build highlight reel</button>
-  <div id="reelOut"></div>
+  <div id="reelBox">
+    <h2>Highlight reel</h2>
+    <div class="card" id="reelOpts"></div>
+    <button id="reelBtn" class="pri big">Build highlight reel</button>
+    <div id="reelOut"></div>
+  </div>
   <button id="homeBtn" class="big" style="margin-top:22px">Back to home</button>
-  <p class="sub" style="margin-top:12px">Download clips before closing this page.</p>
+  <button id="delClips" class="clr">Delete these clips</button>
+  <p class="sub" style="margin-top:12px">Clips are kept for your last 5 workouts.</p>
 </div>
 
 <script>
@@ -427,7 +440,7 @@ function reelSegments(set,opt){
 }
 /*</core>*/
 
-const APP_VERSION='v8'; // keep in step with VERSION in sw.js
+const APP_VERSION='v9'; // keep in step with VERSION in sw.js
 const $=id=>document.getElementById(id);
 function replay(el,c){if(!el)return;el.classList.remove(c);void el.offsetWidth;el.classList.add(c);}
 const store={
@@ -481,8 +494,8 @@ function todayIdx(){
   if(routine.nextFrom<t) routine.nextFrom=t;
   return routine.next;
 }
-function completeDay(idx){
-  const n=routine.cycle.length, t=dstr(new Date());
+function completeDay(idx,t=dstr(new Date())){
+  const n=routine.cycle.length;
   routine.done={date:t,idx}; routine.next=(idx+1)%n; routine.nextFrom=addDays(t,1);
   sel=idx; openRow=-1; setPlan(); saveRoutine();
 }
@@ -560,6 +573,7 @@ $('home').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
   const d=b.dataset;
   if(d.act!=='clear') confirmClear=null;
+  if(d.hist){openWorkout(+d.hist);return;}
   if(d.day!=null){if(+d.day!==sel){sel=+d.day;openRow=-1;setPlan();renderPlan();replay(document.querySelector('.today'),'swap');}return;}
   if(d.open!=null){const i=+d.open;openRow=openRow===i?-1:i;justOpened=true;renderPlan();justOpened=false;return;}
   if(d.f){
@@ -619,11 +633,47 @@ function renderHistory(){
   const h=store.get('rc_history',[]), wk=h.filter(s=>Date.now()-s.date<7*864e5).length;
   $('week').textContent=wk?`${wk} ${wk===1?'workout':'workouts'} this week`:'';
   $('history').innerHTML=h.length?h.slice(0,8).map(s=>{const d=new Date(s.date);
-    return `<div class="hrow"><div class="hdate">${d.toLocaleDateString(undefined,{day:'numeric',month:'short'})}<small>${d.toLocaleDateString(undefined,{weekday:'long'})}</small></div>
-    <div class="hlines">${s.day?`<span class="hday">${esc(s.day)}</span>`:''}${s.ex.map(e=>`<b>${e.name}</b> ${e.sets.map(x=>`${x.w||'BW'}×${x.r}`).join(', ')}`).join('<br>')}</div></div>`;}).join('')
+    return `<button class="hrow" data-hist="${s.date}"><div class="hdate">${d.toLocaleDateString(undefined,{day:'numeric',month:'short'})}<small>${d.toLocaleDateString(undefined,{weekday:'long'})}</small></div>
+    <div class="hlines">${s.day?`<span class="hday">${esc(s.day)}</span>`:''}${s.ex.map(e=>`<b>${e.name}</b> ${e.sets.map(x=>`${x.w||'BW'}×${x.r}`).join(', ')}`).join('<br>')}</div></button>`;}).join('')
     :'<p class="sub">None yet.</p>';
 }
-setPlan(); renderPlan(); renderSettings(); renderHistory();
+
+/* ---------- BACKUP (split, weights, settings and history in one file; clips are not included) ---------- */
+let bkPending=null;
+const bkMsg=html=>{$('bkMsg').innerHTML=html?`<p class="sub" style="margin:10px 0 0">${html}</p>`:'';};
+$('bkSave').onclick=async()=>{
+  const data={app:'repcam',format:1,saved:Date.now(),routine,settings,history:store.get('rc_history',[])};
+  await saveFile(new Blob([JSON.stringify(data)],{type:'application/json'}),`repcam-backup-${dstr(new Date())}.json`);
+  bkMsg('Backup file created.');
+};
+$('bkLoad').onclick=()=>{$('bkFile').value='';$('bkFile').click();};
+$('bkFile').onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{
+    const d=JSON.parse(await f.text());
+    if(d.app!=='repcam'||!d.routine||!d.routine.workouts||!Array.isArray(d.routine.cycle)||!d.routine.cycle.length||!Array.isArray(d.history)) throw 0;
+    bkPending=d;
+    bkMsg(`Backup from ${new Date(d.saved).toLocaleDateString(undefined,{day:'numeric',month:'long',year:'numeric'})} with ${d.history.length} ${d.history.length===1?'workout':'workouts'}. It replaces what's on this phone.
+      <span class="row" style="margin-top:8px"><button class="sm grow" data-bk="no">Cancel</button><button class="sm grow red" data-bk="yes">Restore</button></span>`);
+  }catch(err){bkPending=null;bkMsg('That file is not a RepCam backup.');}
+};
+$('bkMsg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b||!b.dataset.bk) return;
+  e.stopPropagation();
+  if(b.dataset.bk==='yes'&&bkPending){
+    routine=bkPending.routine;
+    for(const w of Object.values(routine.workouts)) w.plan=(w.plan||[]).filter(p=>LIB[p.key]);
+    dedupe(); routine.next=Math.min(Math.max(0,routine.next|0),routine.cycle.length-1);
+    Object.assign(settings,bkPending.settings||{}); settings.reel=Object.assign({mode:'reps',first:3,last:1,secFirst:5,secLast:3,sets:'best'},settings.reel||{});
+    store.set('rc_settings',settings); store.set('rc_history',bkPending.history.slice(0,50));
+    sel=todayIdx(); openRow=-1; setPlan(); renderPlan(); renderSettings(); renderHistory(); saveRoutine();
+    bkMsg('Restored.');
+  }else bkMsg('');
+  bkPending=null;
+});
+// If the app was closed or reloaded in the middle of a workout, log the sets that were already saved
+(function(){const a=store.get('rc_active',null); if(a&&a.sets&&a.sets.length){logWorkout(a);} store.set('rc_active',null);})();
+setPlan(); sel=todayIdx(); setPlan(); renderPlan(); renderSettings(); renderHistory();
 setTimeout(()=>loadPose(),300); // start loading the rep counter while the home screen is showing
 
 /* ---------- SOUND ---------- */
@@ -766,6 +816,7 @@ $('startBtn').onclick=async()=>{
   sess={date:Date.now(),idx:sel,name:curWorkout().name,plan:plan.filter(p=>p.sets>0).map(p=>({...p})),ei:0,si:0,sets:[]};
   show('session'); loopOn=true; loop(); toReady(true);
   try{wake=await navigator.wakeLock.request('screen');}catch(e){}
+  try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}
   if(!poseReady) setStatus('Loading rep counter…');
   loadPose();
 };
@@ -847,7 +898,9 @@ function confirmSet(rec){
   $('redo').onclick=()=>toReady(false);
   $('save').onclick=()=>{
     ex.weight=w;
-    sess.sets.push({key:ex.key,name:LIB[ex.key].name,set:sess.si+1,w,r,warm:$('warm').checked,reps:rec.reps,dur:rec.dur,blob:rec.blob});
+    const saved={key:ex.key,name:LIB[ex.key].name,set:sess.si+1,w,r,warm:$('warm').checked,reps:rec.reps,dur:rec.dur,blob:rec.blob};
+    sess.sets.push(saved); saveActive();
+    DB.put({id:`${sess.date}-${String(sess.sets.length).padStart(3,'0')}`,...saved}).catch(()=>{sess.clipFail=true;});
     const pl=plan.find(p=>p.key===ex.key); if(pl){pl.weight=w;saveRoutine();}
     let newEx=false;
     if(sess.si+1<ex.sets) sess.si++; else{sess.ei++;sess.si=0;newEx=true;}
@@ -872,34 +925,108 @@ function rest(sec,newEx){
 }
 // Leave the recording screen without logging anything
 function cancelSession(){
+  store.set('rc_active',null);
   clearInterval(timer); setPh('idle'); loopOn=false;
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
   try{wake&&wake.release();}catch(e){}
   show('home'); renderPlan();
 }
+// Write a workout's numbers to history and mark its day as done. Used at the end of a workout,
+// and on the next launch if the app was closed or reloaded in the middle of one.
+function logWorkout(w){
+  if(!w||!w.sets||!w.sets.length) return;
+  const byEx=[]; for(const s of w.sets){let g=byEx.find(x=>x.key===s.key);if(!g){g={key:s.key,name:s.name,sets:[]};byEx.push(g);}g.sets.push(s);}
+  const h=store.get('rc_history',[]).filter(x=>x.date!==w.date);
+  h.unshift({date:w.date,day:w.name,ex:byEx.map(g=>({key:g.key,name:g.name,sets:g.sets.map(s=>({w:s.w,r:s.r,n:s.set,warm:s.warm||undefined}))}))});
+  h.sort((a,b)=>b.date-a.date); store.set('rc_history',h.slice(0,50));
+  if(w.idx<routine.cycle.length) completeDay(w.idx,dstr(new Date(w.date)));
+  pruneClips();
+}
+// Progress of the workout in hand, kept on the phone so a reload can't lose the numbers
+function saveActive(){
+  store.set('rc_active',{date:sess.date,idx:sess.idx,name:sess.name,sets:sess.sets.map(s=>({key:s.key,name:s.name,set:s.set,w:s.w,r:s.r,warm:s.warm}))});
+}
 function finish(){
   clearInterval(timer); setPh('idle'); loopOn=false;
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
   try{wake&&wake.release();}catch(e){}
-  const byEx=[]; for(const s of sess.sets){let g=byEx.find(x=>x.key===s.key);if(!g){g={key:s.key,name:s.name,sets:[]};byEx.push(g);}g.sets.push(s);}
-  if(sess.sets.length){
-    const h=store.get('rc_history',[]);
-    h.unshift({date:sess.date,day:sess.name,ex:byEx.map(g=>({key:g.key,name:g.name,sets:g.sets.map(s=>({w:s.w,r:s.r,n:s.set}))}))});
-    store.set('rc_history',h.slice(0,50));
-    completeDay(sess.idx);
-  }
-  const vol=sess.sets.filter(s=>!s.warm).reduce((a,s)=>a+s.w*s.r,0);
-  $('sumTitle').textContent=`${sess.name} done`;
-  $('sumSub').textContent=sess.sets.length?`${sess.sets.length} ${sess.sets.length===1?'set':'sets'}, ${Math.round(vol)} kg total volume`:'No sets were saved.';
-  $('sumBody').innerHTML=byEx.map(g=>`<div class="card"><div class="exname" style="margin-bottom:6px">${g.name}</div><table>${g.sets.map(s=>{
-    const i=sess.sets.indexOf(s); const ext=s.blob&&s.blob.type.includes('mp4')?'mp4':'webm';
-    return `<tr><td>Set ${s.set}${s.warm?' (warm-up)':''}</td><td><b>${fmtW(s.w)} × ${s.r}</b></td><td class="r">${s.blob?`<a href="${URL.createObjectURL(s.blob)}" download="${s.key}-set${s.set}.${ext}">Download clip</a>`:'no clip'}</td></tr>`;}).join('')}</table></div>`).join('');
-  renderReelOpts(); $('reelOut').innerHTML=''; $('reelBtn').disabled=!sess.sets.some(s=>s.blob&&!s.warm); $('reelBtn').textContent='Build highlight reel';
-  show('summary'); renderPlan(); renderHistory();
+  logWorkout(sess); store.set('rc_active',null);
+  showSummary({date:sess.date,name:sess.name,sets:sess.sets,fresh:true});
+  renderPlan(); renderHistory();
 }
-$('homeBtn').onclick=()=>show('home');
+/* ---------- WORKOUT SUMMARY (right after a workout, or reopened from history) ---------- */
+let sumSets=[], sumDate=0, delSure=false;
+function showSummary(w){
+  sumSets=w.sets; sumDate=w.date; delSure=false;
+  const byEx=[]; for(const s of sumSets){let g=byEx.find(x=>x.key===s.key);if(!g){g={key:s.key,name:s.name,sets:[]};byEx.push(g);}g.sets.push(s);}
+  const n=sumSets.length, vol=sumSets.filter(s=>!s.warm).reduce((a,s)=>a+s.w*s.r,0);
+  $('sumTitle').textContent=w.fresh?`${w.name} done`:w.name;
+  $('sumSub').textContent=(w.fresh?'':new Date(w.date).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'})+'. ')
+    +(n?`${n} ${n===1?'set':'sets'}, ${Math.round(vol)} kg total volume`:'No sets were saved.');
+  $('sumBody').innerHTML=byEx.map(g=>`<div class="card"><div class="exname" style="margin-bottom:6px">${g.name}</div><table>${g.sets.map(s=>
+    `<tr><td>Set ${s.set}${s.warm?' (warm-up)':''}</td><td><b>${fmtW(s.w)} × ${s.r}</b></td><td class="r">${s.blob?`<button class="linkbtn" data-clip="${sumSets.indexOf(s)}">Save clip</button>`:'no clip'}</td></tr>`).join('')}</table></div>`).join('');
+  const clips=sumSets.some(s=>s.blob);
+  $('reelBox').style.display=clips?'':'none';
+  $('delClips').style.display=clips?'':'none'; $('delClips').textContent='Delete these clips'; $('delClips').classList.remove('sure');
+  renderReelOpts(); $('reelOut').innerHTML=''; $('reelBtn').disabled=!sumSets.some(s=>s.blob&&!s.warm); $('reelBtn').textContent='Build highlight reel';
+  show('summary'); window.scrollTo(0,0);
+}
+const clipExt=b=>b.type.includes('mp4')?'mp4':'webm';
+// On a phone this opens the share sheet (Save Video, Save to Files, AirDrop...); elsewhere it downloads the file
+async function saveFile(blob,name){
+  try{
+    const f=new File([blob],name,{type:blob.type});
+    if(matchMedia('(pointer:coarse)').matches&&navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});return;}
+  }catch(e){if(e&&e.name==='AbortError') return;}
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove();
+}
+$('summary').addEventListener('click',async e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.clip!=null){const s=sumSets[+b.dataset.clip]; if(s&&s.blob) saveFile(s.blob,`${s.key}-set${s.set}.${clipExt(s.blob)}`);}
+  if(b.id==='saveReel'&&reelBlob) saveFile(reelBlob,`workout-reel.${clipExt(reelBlob)}`);
+  if(b.id==='delClips'){
+    if(!delSure){delSure=true;b.textContent='Tap again to delete';b.classList.add('sure');return;}
+    try{await DB.delSession(sumDate);}catch(e){}
+    sumSets.forEach(s=>{s.blob=null;}); showSummary({date:sumDate,name:$('sumTitle').textContent,sets:sumSets,fresh:false});
+  }
+});
+$('homeBtn').onclick=()=>{show('home');renderHistory();};
+// Reopen a past workout from the home screen, with its saved clips
+async function openWorkout(date){
+  const hEntry=store.get('rc_history',[]).find(x=>x.date===date); if(!hEntry) return;
+  let recs=[]; try{recs=await DB.bySession(date);}catch(e){}
+  const sets=recs.length?recs.map(r=>({key:r.key,name:r.name,set:r.set,w:r.w,r:r.r,warm:r.warm,reps:r.reps||[],dur:r.dur,blob:r.blob||null}))
+    :hEntry.ex.flatMap(x=>x.sets.map((s,i)=>({key:x.key,name:x.name,set:s.n||i+1,w:s.w,r:s.r,warm:!!s.warm,reps:[],dur:0,blob:null})));
+  showSummary({date,name:hEntry.day||'Workout',sets,fresh:false});
+}
+
+/* ---------- CLIP STORAGE (on the phone, survives closing the app) ---------- */
+const KEEP_WORKOUTS=5;
+const DB={
+  _p:null,
+  open(){return this._p||(this._p=new Promise((res,rej)=>{
+    const r=indexedDB.open('repcam',1);
+    r.onupgradeneeded=()=>r.result.createObjectStore('clips',{keyPath:'id'});
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  }).catch(e=>{this._p=null;throw e;}));},
+  async tx(mode,fn){
+    const db=await this.open();
+    return new Promise((res,rej)=>{const t=db.transaction('clips',mode), q=fn(t.objectStore('clips'));
+      t.oncomplete=()=>res(q?q.result:undefined); t.onerror=t.onabort=()=>rej(t.error||new Error('storage failed'));});
+  },
+  range:sid=>IDBKeyRange.bound(`${sid}-`,`${sid}-￿`),
+  put(rec){return this.tx('readwrite',s=>s.put(rec));},
+  bySession(sid){return this.tx('readonly',s=>s.getAll(this.range(sid)));},
+  delSession(sid){return this.tx('readwrite',s=>{s.delete(this.range(sid));});},
+  async sessions(){const keys=await this.tx('readonly',s=>s.getAllKeys());return [...new Set(keys.map(k=>+String(k).split('-')[0]))].sort((a,b)=>b-a);},
+};
+// Keep clips for the most recent workouts only, so the phone doesn't fill up. Logged numbers are never deleted.
+async function pruneClips(){
+  try{for(const sid of (await DB.sessions()).slice(KEEP_WORKOUTS)) await DB.delSession(sid);}catch(e){}
+}
 
 /* ---------- AUTO-EDIT (highlight reel) ---------- */
+let reelBlob=null;
 const once=(el,ev,ms=6000)=>new Promise((res,rej)=>{const to=setTimeout(()=>rej(new Error(ev+' timeout')),ms);el.addEventListener(ev,()=>{clearTimeout(to);res();},{once:true});});
 function renderReelOpts(){
   const o=settings.reel, secs=o.mode==='secs', n=v=>`${v} ${v===1?'rep':'reps'}`;
@@ -921,10 +1048,10 @@ $('reelOpts').addEventListener('click',e=>{
   store.set('rc_settings',settings); renderReelOpts(); lastBump=null;
 });
 function topSets(){
-  if(settings.reel.sets==='all') return sess.sets.filter(s=>s.blob&&!s.warm);
+  if(settings.reel.sets==='all') return sumSets.filter(s=>s.blob&&!s.warm);
   const out=[]; const seen=new Set();
-  for(const s of sess.sets){ if(seen.has(s.key)) continue; seen.add(s.key);
-    const c=sess.sets.filter(x=>x.key===s.key&&x.blob&&!x.warm);
+  for(const s of sumSets){ if(seen.has(s.key)) continue; seen.add(s.key);
+    const c=sumSets.filter(x=>x.key===s.key&&x.blob&&!x.warm);
     if(c.length) out.push(c.reduce((a,b)=>(b.w>a.w||(b.w===a.w&&b.r>a.r))?b:a));
   }
   return out;
@@ -958,8 +1085,8 @@ $('reelBtn').onclick=async()=>{
       }
     }
     const stopped=new Promise(r=>rec.onstop=r); rec.stop(); await stopped;
-    const blob=new Blob(parts,{type:rec.mimeType||'video/webm'}), url=URL.createObjectURL(blob), ext=blob.type.includes('mp4')?'mp4':'webm';
-    $('reelOut').innerHTML=`<video src="${url}" controls playsinline></video><p><a href="${url}" download="workout-reel.${ext}">Download reel</a></p>`;
+    reelBlob=new Blob(parts,{type:rec.mimeType||'video/webm'});
+    $('reelOut').innerHTML=`<video src="${URL.createObjectURL(reelBlob)}" controls playsinline></video><p><button class="linkbtn" id="saveReel">Save reel</button></p>`;
     btn.textContent='Rebuild highlight reel';
   }catch(e){
     console.error(e); $('reelOut').innerHTML=`<p class="warn">Could not build the reel on this browser (${e.message}). The individual clips above still work.</p>`;

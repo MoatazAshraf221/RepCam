@@ -131,7 +131,7 @@
   #session[data-phase="rec"] #quitBtn,#session[data-phase="cd"] #quitBtn,#session[data-phase="rec"] #flipBtn,#session[data-phase="cd"] #flipBtn{display:none}
   #stage{position:absolute;inset:0;overflow:hidden}
   #stage.mirror video,#stage.mirror canvas{transform:scaleX(-1)}
-  #cam,#overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  #cam,#overlay{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover}
   #hud{position:absolute;top:0;left:0;right:0;padding:calc(12px + env(safe-area-inset-top)) 14px 30px;display:flex;justify-content:space-between;align-items:flex-start;background:linear-gradient(#000b,#0000)}
   #hud .t{font:700 26px/1.1 var(--disp)} #hud .s{font-size:14px;color:#d5dae2}
   #recdot{display:none;align-items:center;gap:6px;font-weight:700;font-size:13px;color:#fff;margin-top:4px}
@@ -217,6 +217,11 @@
   </details>
 
   <details class="set" style="margin-top:10px">
+    <summary>Highlight reel<span class="chev"></span></summary>
+    <div id="reelOpts" style="padding-bottom:10px"></div>
+  </details>
+
+  <details class="set" style="margin-top:10px">
     <summary>Backup<span class="chev"></span></summary>
     <div style="padding-bottom:14px">
       <div class="row"><button id="bkSave" class="grow sm">Save backup file</button><button id="bkLoad" class="grow sm">Restore from file</button></div>
@@ -254,7 +259,7 @@
 <!-- SESSION -->
 <div id="session" class="view">
   <div id="stage" class="mirror">
-    <video id="cam" playsinline muted autoplay></video>
+    <video id="cam" playsinline webkit-playsinline muted autoplay disablepictureinpicture disableremoteplayback></video>
     <canvas id="overlay"></canvas>
   </div>
   <div id="hud">
@@ -277,7 +282,6 @@
   <div id="sumBody"></div>
   <div id="reelBox">
     <h2>Highlight reel</h2>
-    <div class="card" id="reelOpts"></div>
     <button id="reelBtn" class="pri big">Build highlight reel</button>
     <div id="reelOut"></div>
   </div>
@@ -440,7 +444,7 @@ function reelSegments(set,opt){
 }
 /*</core>*/
 
-const APP_VERSION='v9'; // keep in step with VERSION in sw.js
+const APP_VERSION='v10'; // shown at the bottom of the home screen
 const $=id=>document.getElementById(id);
 function replay(el,c){if(!el)return;el.classList.remove(c);void el.offsetWidth;el.classList.add(c);}
 const store={
@@ -570,7 +574,7 @@ function renderSplit(){
 }
 function bump(obj,f,d){const [lo,hi,st]=LIMITS[f];obj[f]=Math.min(hi,Math.max(lo,(+obj[f]||0)+d*st));}
 $('home').addEventListener('click',e=>{
-  const b=e.target.closest('button'); if(!b) return;
+  const b=e.target.closest('button'); if(!b||b.closest('#reelOpts')) return;   // reel options have their own handler
   const d=b.dataset;
   if(d.act!=='clear') confirmClear=null;
   if(d.hist){openWorkout(+d.hist);return;}
@@ -673,7 +677,7 @@ $('bkMsg').addEventListener('click',e=>{
 });
 // If the app was closed or reloaded in the middle of a workout, log the sets that were already saved
 (function(){const a=store.get('rc_active',null); if(a&&a.sets&&a.sets.length){logWorkout(a);} store.set('rc_active',null);})();
-setPlan(); sel=todayIdx(); setPlan(); renderPlan(); renderSettings(); renderHistory();
+setPlan(); sel=todayIdx(); setPlan(); renderPlan(); renderSettings(); renderHistory(); renderReelOpts();
 setTimeout(()=>loadPose(),300); // start loading the rep counter while the home screen is showing
 
 /* ---------- SOUND ---------- */
@@ -689,7 +693,21 @@ const buzz=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}};
 /* ---------- CAMERA + POSE ---------- */
 const cam=$('cam'), overlay=$('overlay'), octx=overlay.getContext('2d');
 let stream=null, facing='user', landmarker=null, poseReady=false, loopOn=false, lastVT=-1, lastDetect=0;
-let bodySeen=false;
+let bodySeen=false, fitKey='';
+// Scale the camera picture to cover the whole screen, whatever size the phone's camera reports.
+// iPhones can change the picture size when a recording starts or stops, so this is re-checked constantly
+// instead of leaving it to the browser's own layout.
+function fitStage(){
+  const vw=cam.videoWidth, vh=cam.videoHeight, st=$('stage'), W=st.clientWidth, H=st.clientHeight;
+  if(!vw||!vh||!W||!H) return;
+  const key=[vw,vh,W,H].join('x'); if(key===fitKey) return; fitKey=key;
+  const s=Math.max(W/vw,H/vh), w=Math.ceil(vw*s), hh=Math.ceil(vh*s);
+  for(const el of [cam,overlay]){el.style.objectFit='fill';el.style.width=w+'px';el.style.height=hh+'px';el.style.left=Math.round((W-w)/2)+'px';el.style.top=Math.round((H-hh)/2)+'px';}
+}
+['resize','loadedmetadata','playing'].forEach(ev=>cam.addEventListener(ev,()=>{fitKey='';fitStage();}));
+window.addEventListener('resize',()=>{fitKey='';fitStage();});
+// The preview can stall when a recording stops; make sure it is running again
+function wakePreview(){ if(stream&&cam.srcObject!==stream) cam.srcObject=stream; if(cam.paused) cam.play().catch(()=>{}); fitKey=''; fitStage(); }
 async function startCamera(){
   if(stream) stream.getTracks().forEach(t=>t.stop());
   stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}},audio:false});
@@ -742,6 +760,7 @@ function loop(){
   requestAnimationFrame(loop);
   const now=performance.now();
   if(!cam.videoWidth) return;
+  fitStage();
   if(overlay.width!==cam.videoWidth){overlay.width=cam.videoWidth;overlay.height=cam.videoHeight;}
   if(poseReady&&cam.currentTime!==lastVT&&now-lastDetect>60){
     lastVT=cam.currentTime; lastDetect=now;
@@ -833,6 +852,7 @@ $('quitYes').onclick=()=>{$('quitSheet').hidden=true;finish();};
 function setPh(p){phase=p;$('session').dataset.phase=p;replay($('panelBody'),'swap');}
 
 function toReady(newExercise){
+  wakePreview();
   setPh('ready'); clearInterval(timer); hud(); showBig('');
   $('recdot').style.display='none';
   const ex=curEx();
@@ -876,7 +896,7 @@ function endSet(auto){
   if(phase!=='rec') return;
   setPh('confirm'); $('recdot').style.display='none'; beep(520,250); buzz([80,60,80]);
   const reps=counter.reps.slice(), dur=(performance.now()-recT0)/1000, ex=curEx();
-  const done=blob=>confirmSet({reps,dur,blob,auto});
+  const done=blob=>{confirmSet({reps,dur,blob,auto});wakePreview();};
   if(recorder&&recorder.state!=='inactive'){
     const type=recorder.mimeType||'video/webm';
     recorder.onstop=()=>done(new Blob(chunks,{type}));
@@ -968,7 +988,7 @@ function showSummary(w){
   const clips=sumSets.some(s=>s.blob);
   $('reelBox').style.display=clips?'':'none';
   $('delClips').style.display=clips?'':'none'; $('delClips').textContent='Delete these clips'; $('delClips').classList.remove('sure');
-  renderReelOpts(); $('reelOut').innerHTML=''; $('reelBtn').disabled=!sumSets.some(s=>s.blob&&!s.warm); $('reelBtn').textContent='Build highlight reel';
+  $('reelOut').innerHTML=''; $('reelBtn').disabled=!sumSets.some(s=>s.blob&&!s.warm); $('reelBtn').textContent='Build highlight reel';
   show('summary'); window.scrollTo(0,0);
 }
 const clipExt=b=>b.type.includes('mp4')?'mp4':'webm';
@@ -1037,6 +1057,7 @@ function renderReelOpts(){
     +seg('sets',[['best','Best set'],['all','Every set']]);
 }
 $('reelOpts').addEventListener('click',e=>{
+  e.stopPropagation();   // these buttons sit inside the home screen; keep the home handler out of it
   const b=e.target.closest('button'); if(!b) return; const o=settings.reel, d=b.dataset;
   if(d.seg) o[d.seg]=d.v;
   if(d.f){
@@ -1121,7 +1142,7 @@ async function saveForOffline(){
 async function offlineStatus(){
   let ok=false;
   try{
-    if(navigator.serviceWorker&&navigator.serviceWorker.controller&&window.caches&&await caches.has('repcam-shell-'+APP_VERSION)){
+    if(navigator.serviceWorker&&navigator.serviceWorker.controller&&window.caches&&await caches.has('repcam-shell')){
       const keys=await (await caches.open('repcam-runtime')).keys();
       ok=keys.some(r=>r.url.endsWith('.task'))&&keys.some(r=>r.url.endsWith('.wasm'));
     }

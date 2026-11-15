@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="RepCam">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#ECEEE9">
+<meta name="theme-color" content="#1B2330">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://storage.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -152,10 +152,20 @@
   .lbl{font-size:13px;color:var(--mut);margin:8px 0 4px}
 
   /* ---- summary ---- */
+  .seg{display:flex;gap:4px;background:var(--field);border:1px solid var(--line);border-radius:12px;padding:4px;margin:6px 0}
+  .seg button{flex:1;padding:9px 6px;border-radius:9px;background:none;font-size:15px}
+  .seg button.on{background:var(--txt);color:#fff}
+  #reelOpts .stp:last-of-type{border-bottom:0}
   table{width:100%;border-collapse:collapse;font-size:15px} td{padding:7px 4px;border-top:1px solid var(--line)}
   td.r{text-align:right}
   #reelOut video{width:100%;border-radius:12px;margin-top:10px;background:#000}
 
+  /* ---- opening screen: the icon on a dark field until the app is ready ---- */
+  #splash{position:fixed;inset:0;z-index:50;background:#1B2330;display:grid;place-items:center;transition:opacity .45s ease}
+  #splash svg{width:36vmin;max-width:200px;animation:splashin .55s cubic-bezier(.2,.8,.3,1) both;transition:transform .45s ease}
+  #splash.out{opacity:0;pointer-events:none}
+  #splash.out svg{transform:scale(1.1)}
+  @keyframes splashin{from{opacity:0;transform:scale(.86)}}
   /* ---- motion: short, and only in answer to a tap (plus one slow pulse on the record dot) ---- */
   button{transition:transform .12s ease-out,filter .12s ease-out,background-color .15s,border-color .15s;touch-action:manipulation}
   button:active:not(:disabled){transform:scale(.95);filter:brightness(.92)}
@@ -179,6 +189,10 @@
 </style>
 </head>
 <body>
+<div id="splash" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none">
+  <g stroke="#FFD23F" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M35 20H20V35"/><path d="M65 20H80V35"/><path d="M35 80H20V65"/><path d="M65 80H80V65"/></g>
+  <g fill="#ECEEE9"><rect x="25.5" y="47" width="49" height="6" rx="3"/><rect x="31.6" y="34.9" width="8" height="30.2" rx="3.3"/><rect x="60.4" y="34.9" width="8" height="30.2" rx="3.3"/><rect x="24.7" y="39.9" width="6" height="20.2" rx="2.6"/><rect x="69.3" y="39.9" width="6" height="20.2" rx="2.6"/></g>
+</svg></div>
 
 <!-- HOME -->
 <div id="home" class="view on">
@@ -249,6 +263,7 @@
   <p class="sub" id="sumSub"></p>
   <div id="sumBody"></div>
   <h2>Highlight reel</h2>
+  <div class="card" id="reelOpts"></div>
   <button id="reelBtn" class="pri big">Build highlight reel</button>
   <div id="reelOut"></div>
   <button id="homeBtn" class="big" style="margin-top:22px">Back to home</button>
@@ -361,20 +376,32 @@ class SetTracker{
   get reps(){return this.c.reduce((a,b)=>b.reps.length>a.reps.length?b:a).reps;}
   idleFor(t){const v=this.c.filter(c=>c.lastMoveT!=null).map(c=>c.idleFor(t));return v.length?Math.min(...v):0;}
 }
-// Segments of a set clip that go into the reel: first 3 reps + last rep
-function reelSegments(reps){
-  if(!reps.length) return [{a:0,b:6}];
-  const n=reps.length, k=Math.min(3,n)-1;
-  const segs=[{a:Math.max(0,reps[0].start-0.6),b:reps[k].end+0.4}];
-  if(n>3){
-    const a=Math.max(segs[0].b,reps[n-1].start-0.6);
-    segs.push({a,b:reps[n-1].end+0.6});
+// Parts of a set clip that go into the reel, as {a,b} in seconds.
+// opt.mode 'reps': the first opt.first reps and the last opt.last reps.
+// opt.mode 'secs': the first opt.secFirst seconds and the last opt.secLast seconds of the lifting itself.
+function reelSegments(set,opt){
+  const reps=set.reps||[], n=reps.length, dur=set.dur||(n?reps[n-1].end+0.6:6);
+  // where the lifting starts and ends, so walking to and from the phone is left out
+  const t0=n?Math.max(0,reps[0].start-0.6):0, t1=n?Math.min(dur,reps[n-1].end+0.6):dur;
+  let segs=[];
+  if(opt.mode==='secs'||!n){
+    const f=opt.mode==='secs'?opt.secFirst:6, l=opt.mode==='secs'?opt.secLast:0, len=t1-t0;
+    const ff=Math.min(f,len), ll=Math.min(l,len-ff);
+    if(ff>0) segs.push({a:t0,b:t0+ff});
+    if(ll>0) segs.push({a:t1-ll,b:t1});
+  }else{
+    const f=Math.min(opt.first,n), l=Math.min(opt.last,n-f);
+    if(f>0) segs.push({a:t0,b:reps[f-1].end+0.4});
+    if(l>0) segs.push({a:Math.max(0,reps[n-l].start-0.6),b:t1});
   }
+  if(!segs.length) segs.push({a:t0,b:Math.min(t1,t0+6)});
+  // join parts that touch or overlap
+  if(segs.length===2&&segs[1].a<=segs[0].b+0.05) segs=[{a:segs[0].a,b:segs[1].b}];
   return segs;
 }
 /*</core>*/
 
-const APP_VERSION='v4'; // keep in step with VERSION in sw.js
+const APP_VERSION='v6'; // keep in step with VERSION in sw.js
 const $=id=>document.getElementById(id);
 function replay(el,c){if(!el)return;el.classList.remove(c);void el.offsetWidth;el.classList.add(c);}
 const store={
@@ -383,6 +410,7 @@ const store={
 };
 let plan=[];
 let settings=Object.assign({cd:3,idle:8},store.get('rc_settings',{}));
+settings.reel=Object.assign({mode:'reps',first:3,last:1,secFirst:5,secLast:3,sets:'best'},settings.reel||{});
 function show(v){document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id===v));}
 
 /* ---------- HOME ---------- */
@@ -412,24 +440,43 @@ function dedupe(){
 }
 dedupe();
 routine.next=Math.min(Math.max(0,routine.next|0),routine.cycle.length-1);
-let sel=routine.next, openRow=-1, justOpened=false, lastBump=null;
+const pad2=n=>String(n).padStart(2,'0');
+const dstr=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+const addDays=(s,k)=>{const [y,m,d]=s.split('-').map(Number);return dstr(new Date(y,m-1,d+k));};
+const doneToday=()=>!!routine.done&&routine.done.date===dstr(new Date())&&routine.done.idx<routine.cycle.length;
+// Which day of the split today is. A finished workout stays on today and the next one starts tomorrow.
+// A workout that hasn't been done waits for you; rest days pass with the calendar.
+function todayIdx(){
+  const n=routine.cycle.length, t=dstr(new Date());
+  if(doneToday()) return routine.done.idx;
+  if(!routine.nextFrom||routine.nextFrom>t) routine.nextFrom=t;
+  let guard=0;
+  while(routine.nextFrom<t&&!routine.workouts[routine.cycle[routine.next]]&&guard++<n){routine.next=(routine.next+1)%n;routine.nextFrom=addDays(routine.nextFrom,1);}
+  if(routine.nextFrom<t) routine.nextFrom=t;
+  return routine.next;
+}
+function completeDay(idx){
+  const n=routine.cycle.length, t=dstr(new Date());
+  routine.done={date:t,idx}; routine.next=(idx+1)%n; routine.nextFrom=addDays(t,1);
+  sel=idx; openRow=-1; setPlan(); saveRoutine();
+}
+let sel=todayIdx(), openRow=-1, justOpened=false, lastBump=null;
 const saveRoutine=()=>store.set('rc_routine',routine);
 const curWorkout=()=>routine.workouts[routine.cycle[sel]]||null;
 function setPlan(){const w=curWorkout();plan=w?w.plan:[];}
-function advanceDay(){routine.next=(sel+1)%routine.cycle.length;sel=routine.next;openRow=-1;setPlan();saveRoutine();}
 const fmtRest=s=>s?`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`:'none';
 const fmtW=w=>w?`${w} kg`:'bodyweight';
-const LIMITS={sets:[1,12,1],weight:[0,500,2.5],rest:[0,600,15],cd:[1,10,1],idle:[0,30,2]};
+const LIMITS={sets:[1,12,1],weight:[0,500,2.5],rest:[0,600,15],cd:[1,10,1],idle:[0,30,2],first:[0,10,1],last:[0,10,1],secFirst:[0,30,1],secLast:[0,30,1]};
 const stepper=(label,f,val,i,hint)=>`<div class="stp"><span class="stl">${label}${hint?`<span class="hint">${hint}</span>`:''}</span>
   <span class="stc"><button data-f="${f}" data-i="${i}" data-d="-1" aria-label="Decrease ${label}">−</button><output${lastBump&&lastBump.f===f&&String(lastBump.i)===String(i)?' class="tick"':''}>${val}</output><button data-f="${f}" data-i="${i}" data-d="1" aria-label="Increase ${label}">+</button></span></div>`;
 function lastLine(key){const ls=lastSets(key);return ls&&ls.length?`<span class="exlast">Last time ${ls.map(x=>`${x.w||'BW'}×${x.r}`).join(', ')}</span>`:'';}
-function dayDate(i){const n=routine.cycle.length,d=new Date();d.setDate(d.getDate()+((i-routine.next)%n+n)%n);return d;}
+function dayDate(i){const n=routine.cycle.length,d=new Date();d.setDate(d.getDate()+((i-todayIdx())%n+n)%n);return d;}
 function renderDays(){
-  const n=routine.cycle.length, first=dayDate(routine.next), last=dayDate((routine.next+n-1)%n), mo=d=>d.toLocaleDateString(undefined,{month:'long'});
+  const n=routine.cycle.length, base=todayIdx(), done=doneToday(), first=dayDate(base), last=dayDate((base+n-1)%n), mo=d=>d.toLocaleDateString(undefined,{month:'long'});
   $('month').textContent=mo(first)===mo(last)?`${mo(first)} ${first.getFullYear()}`:`${mo(first)} to ${mo(last)}`;
   $('days').innerHTML=Array.from({length:n},(_,k)=>{
-    const i=(routine.next+k)%n, w=routine.workouts[routine.cycle[i]], d=dayDate(i), name=w?esc(w.name):'Rest';
-    return `<button class="day${i===sel?' sel':''}${w?'':' off'}${k===0?' today':''}" data-day="${i}" aria-pressed="${i===sel}" aria-label="${d.toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'})}, ${name}"><small>${k===0?'Today':d.toLocaleDateString(undefined,{weekday:'short'})}</small><b>${d.getDate()}</b><span>${name}</span></button>`;}).join('');
+    const i=(base+k)%n, w=routine.workouts[routine.cycle[i]], d=dayDate(i), name=w?esc(w.name):'Rest';
+    return `<button class="day${i===sel?' sel':''}${w?'':' off'}${k===0?' today':''}" data-day="${i}" aria-pressed="${i===sel}" aria-label="${d.toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'})}, ${name}"><small>${k===0?(done?'Done':'Today'):d.toLocaleDateString(undefined,{weekday:'short'})}</small><b>${d.getDate()}</b><span>${name}</span></button>`;}).join('');
   // centre the selected day by scrolling the strip only, never the page
   const strip=$('days'), s=strip.querySelector('.sel');
   if(s&&strip.scrollWidth>strip.clientWidth){
@@ -437,7 +484,7 @@ function renderDays(){
     try{strip.scrollTo({left,behavior:'smooth'});}catch(e){strip.scrollLeft=left;}
   }
 }
-const dayLabel=()=>sel===routine.next?'Today':dayDate(sel).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'});
+const dayLabel=()=>sel===todayIdx()?(doneToday()?'Today, done':'Today'):dayDate(sel).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'});
 function renderPlan(){
   const w=curWorkout(), n=routine.cycle.length;
   renderDays();
@@ -446,8 +493,8 @@ function renderPlan(){
     const nw=routine.workouts[routine.cycle[(sel+1)%n]];
     $('planMeta').textContent=`${dayLabel()}. ${nw?nw.name:'Rest'} is next.`;
     $('plan').innerHTML=''; $('addBtn').style.display='none';
-    $('startBtn').innerHTML='Rest day done'; $('startBtn').disabled=false;
-    return;
+    $('startBtn').innerHTML='Rest day'; $('startBtn').disabled=true;
+    saveRoutine(); return;
   }
   const sets=plan.reduce((a,p)=>a+p.sets,0), mins=Math.round(plan.reduce((a,p)=>a+p.sets*(45+p.rest),0)/60);
   $('planMeta').textContent=`${dayLabel()}. `+(plan.length?`${plan.length} ${plan.length===1?'exercise':'exercises'}, ${sets} sets, about ${mins} min.`:'Nothing planned yet.');
@@ -510,6 +557,7 @@ $('home').addEventListener('click',e=>{
     if(a==='down'&&i<c.length-1) [c[i+1],c[i]]=[c[i],c[i+1]];
     if(a==='newwk'){const name=$('newWk').value.trim(); if(name){routine.workouts['w'+Date.now()]={name:name.slice(0,24),plan:[]};$('newWk').value='';}}
     routine.next=Math.min(routine.next,c.length-1); sel=Math.min(sel,c.length-1);
+    if(routine.done&&routine.done.idx>=c.length) routine.done=null;
     saveRoutine(); renderSplit();
   }
 });
@@ -656,12 +704,12 @@ function pickMime(){
 }
 $('startBtn').onclick=async()=>{
   $('homeMsg').textContent='';
-  if(!curWorkout()){advanceDay();renderPlan();replay(document.querySelector('.today'),'swap');return;}
+  if(!curWorkout()) return;
   if(!plan.length){$('homeMsg').textContent='Add at least one exercise.';return;}
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$('homeMsg').textContent='Camera is not available. Open this page over https (or localhost).';return;}
   beep(1,1); // unlock audio on this tap
   try{await startCamera();}catch(e){$('homeMsg').textContent='Camera access was blocked: '+e.message;return;}
-  sess={date:Date.now(),name:curWorkout().name,plan:plan.filter(p=>p.sets>0).map(p=>({...p})),ei:0,si:0,sets:[]};
+  sess={date:Date.now(),idx:sel,name:curWorkout().name,plan:plan.filter(p=>p.sets>0).map(p=>({...p})),ei:0,si:0,sets:[]};
   show('session'); loopOn=true; loop(); toReady(true);
   try{wake=await navigator.wakeLock.request('screen');}catch(e){}
   if(!poseReady) setStatus('Loading rep counter…');
@@ -766,7 +814,7 @@ function finish(){
     const h=store.get('rc_history',[]);
     h.unshift({date:sess.date,day:sess.name,ex:byEx.map(g=>({key:g.key,name:g.name,sets:g.sets.map(s=>({w:s.w,r:s.r}))}))});
     store.set('rc_history',h.slice(0,50));
-    advanceDay();
+    completeDay(sess.idx);
   }
   const vol=sess.sets.filter(s=>!s.warm).reduce((a,s)=>a+s.w*s.r,0);
   $('sumTitle').textContent=`${sess.name} done`;
@@ -774,14 +822,34 @@ function finish(){
   $('sumBody').innerHTML=byEx.map(g=>`<div class="card"><div class="exname" style="margin-bottom:6px">${g.name}</div><table>${g.sets.map(s=>{
     const i=sess.sets.indexOf(s); const ext=s.blob&&s.blob.type.includes('mp4')?'mp4':'webm';
     return `<tr><td>Set ${s.set}${s.warm?' (warm-up)':''}</td><td><b>${fmtW(s.w)} × ${s.r}</b></td><td class="r">${s.blob?`<a href="${URL.createObjectURL(s.blob)}" download="${s.key}-set${s.set}.${ext}">Download clip</a>`:'no clip'}</td></tr>`;}).join('')}</table></div>`).join('');
-  $('reelOut').innerHTML=''; $('reelBtn').disabled=!sess.sets.some(s=>s.blob&&!s.warm); $('reelBtn').textContent='Build highlight reel';
+  renderReelOpts(); $('reelOut').innerHTML=''; $('reelBtn').disabled=!sess.sets.some(s=>s.blob&&!s.warm); $('reelBtn').textContent='Build highlight reel';
   show('summary'); renderPlan(); renderHistory();
 }
 $('homeBtn').onclick=()=>show('home');
 
 /* ---------- AUTO-EDIT (highlight reel) ---------- */
 const once=(el,ev,ms=6000)=>new Promise((res,rej)=>{const to=setTimeout(()=>rej(new Error(ev+' timeout')),ms);el.addEventListener(ev,()=>{clearTimeout(to);res();},{once:true});});
+function renderReelOpts(){
+  const o=settings.reel, secs=o.mode==='secs', n=v=>`${v} ${v===1?'rep':'reps'}`;
+  const seg=(key,opts)=>`<div class="seg">${opts.map(([v,l])=>`<button data-seg="${key}" data-v="${v}" aria-pressed="${o[key]===v}"${o[key]===v?' class="on"':''}>${l}</button>`).join('')}</div>`;
+  $('reelOpts').innerHTML=seg('mode',[['reps','By reps'],['secs','By seconds']])
+    +(secs?stepper('Start of set','secFirst',o.secFirst?o.secFirst+' s':'None','r')+stepper('End of set','secLast',o.secLast?o.secLast+' s':'None','r')
+          :stepper('Start of set','first',o.first?n(o.first):'None','r')+stepper('End of set','last',o.last?n(o.last):'None','r'))
+    +seg('sets',[['best','Best set'],['all','Every set']]);
+}
+$('reelOpts').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return; const o=settings.reel, d=b.dataset;
+  if(d.seg) o[d.seg]=d.v;
+  if(d.f){
+    bump(o,d.f,+d.d); lastBump={i:'r',f:d.f};
+    // the reel needs something from each set: never let both ends reach zero
+    const [x,y]=o.mode==='secs'?['secFirst','secLast']:['first','last'];
+    if(!o[x]&&!o[y]) o[d.f]=1;
+  }
+  store.set('rc_settings',settings); renderReelOpts(); lastBump=null;
+});
 function topSets(){
+  if(settings.reel.sets==='all') return sess.sets.filter(s=>s.blob&&!s.warm);
   const out=[]; const seen=new Set();
   for(const s of sess.sets){ if(seen.has(s.key)) continue; seen.add(s.key);
     const c=sess.sets.filter(x=>x.key===s.key&&x.blob&&!x.warm);
@@ -807,7 +875,7 @@ $('reelBtn').onclick=async()=>{
         const mime=pickMime(); rec=new MediaRecorder(c.captureStream(30),mime?{mimeType:mime,videoBitsPerSecond:5e6}:undefined);
         rec.ondataavailable=e=>{if(e.data&&e.data.size)parts.push(e.data);}; rec.start(500);
       }
-      for(const seg of reelSegments(s.reps)){
+      for(const seg of reelSegments(s,settings.reel)){
         const b=Math.min(seg.b,s.dur||seg.b);
         const sk=once(v,'seeked'); v.currentTime=seg.a; await sk.catch(()=>{});
         await v.play();
@@ -827,6 +895,19 @@ $('reelBtn').onclick=async()=>{
   }
   btn.disabled=false;
 };
+
+/* ---------- OPENING SCREEN ---------- */
+(function(){
+  const sp=$('splash'), t0=performance.now(); if(!sp) return;
+  const hide=()=>setTimeout(()=>{
+    sp.classList.add('out');
+    const tc=document.querySelector('meta[name="theme-color"]'); if(tc) tc.content='#ECEEE9';
+    setTimeout(()=>sp.remove(),500);
+  },Math.max(0,900-(performance.now()-t0)));
+  // wait for the fonts (2 s at most) so the home screen doesn't shift after it appears
+  const fonts=document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve();
+  Promise.race([fonts,new Promise(r=>setTimeout(r,2000))]).then(hide,hide);
+})();
 
 /* ---------- OFFLINE COPY ---------- */
 const CDN_HOSTS=['cdn.jsdelivr.net','storage.googleapis.com','fonts.googleapis.com','fonts.gstatic.com'];

@@ -200,6 +200,7 @@
 
   <h2>Recent workouts</h2>
   <div id="history"></div>
+  <p class="sub" id="ver" style="margin-top:26px;font-size:13px"></p>
 
   <div class="cta"><div>
     <p id="homeMsg" class="warn" role="alert"></p>
@@ -373,6 +374,7 @@ function reelSegments(reps){
 }
 /*</core>*/
 
+const APP_VERSION='v4'; // keep in step with VERSION in sw.js
 const $=id=>document.getElementById(id);
 function replay(el,c){if(!el)return;el.classList.remove(c);void el.offsetWidth;el.classList.add(c);}
 const store={
@@ -570,7 +572,7 @@ async function loadPoseOnce(){
     catch(e){landmarker=await PoseLandmarker.createFromOptions(fs,opt('CPU'));}
     // run one throwaway detection so the first real frame is not the slow one
     try{const w=document.createElement('canvas');w.width=w.height=192;w.getContext('2d').fillRect(0,0,192,192);landmarker.detectForVideo(w,performance.now());}catch(e){}
-    poseReady=true; setStatus('');
+    poseReady=true; setStatus(''); saveForOffline();
   }catch(e){
     console.error(e); setStatus('Rep counter could not load. Enter reps by hand.');
   }
@@ -826,7 +828,32 @@ $('reelBtn').onclick=async()=>{
   btn.disabled=false;
 };
 
-if('serviceWorker' in navigator) window.addEventListener('load',()=>{navigator.serviceWorker.register('./sw.js').catch(()=>{});});
+/* ---------- OFFLINE COPY ---------- */
+const CDN_HOSTS=['cdn.jsdelivr.net','storage.googleapis.com','fonts.googleapis.com','fonts.gstatic.com'];
+// Hand the service worker the list of model and font files this page loaded, so it saves them
+async function saveForOffline(){
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const urls=[...new Set(performance.getEntriesByType('resource').map(e=>e.name))].filter(u=>{try{return CDN_HOSTS.includes(new URL(u).hostname);}catch(e){return false;}});
+    if(reg.active&&urls.length) reg.active.postMessage({type:'cache',urls});
+  }catch(e){}
+}
+async function offlineStatus(){
+  let ok=false;
+  try{
+    if(navigator.serviceWorker&&navigator.serviceWorker.controller&&window.caches&&await caches.has('repcam-shell-'+APP_VERSION)){
+      const keys=await (await caches.open('repcam-runtime')).keys();
+      ok=keys.some(r=>r.url.endsWith('.task'))&&keys.some(r=>r.url.endsWith('.wasm'));
+    }
+  }catch(e){}
+  $('ver').textContent=`Version ${APP_VERSION.slice(1)}. `+(ok?'Saved on this phone, works offline.':'Not saved for offline use yet.');
+  return ok;
+}
+offlineStatus();
+if('serviceWorker' in navigator) window.addEventListener('load',async()=>{
+  try{await navigator.serviceWorker.register('./sw.js');}catch(e){}
+  for(let i=0;i<40;i++){ if(i%3===1) saveForOffline(); if(await offlineStatus()) break; await new Promise(r=>setTimeout(r,3000)); }
+});
 </script>
 </body>
 </html>

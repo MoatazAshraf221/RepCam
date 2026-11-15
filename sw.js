@@ -1,5 +1,5 @@
 // RepCam offline support. Bump the version to force every phone to refresh its saved copy.
-const VERSION='v2', SHELL='repcam-shell-'+VERSION, RUNTIME='repcam-runtime-'+VERSION;
+const VERSION='v3', SHELL='repcam-shell-'+VERSION, RUNTIME='repcam-runtime-'+VERSION;
 const ASSETS=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png'];
 // Fonts and the rep-counting model come from these hosts; they are saved after first use.
 const CDN=['cdn.jsdelivr.net','storage.googleapis.com','fonts.googleapis.com','fonts.gstatic.com'];
@@ -19,8 +19,9 @@ self.addEventListener('fetch',e=>{
   if(url.origin===self.location.origin){
     // The app itself: newest version when online, saved copy when offline
     e.respondWith(fetch(req).then(res=>{
-      if(res.ok){const copy=res.clone();caches.open(SHELL).then(c=>c.put(req,copy));}
-      return res;
+      if(res.ok){const copy=res.clone();caches.open(SHELL).then(c=>c.put(req,copy));return res;}
+      // site unpublished or host error: keep running from the saved copy
+      return caches.match(req,{ignoreSearch:true}).then(hit=>hit||res);
     }).catch(()=>caches.match(req,{ignoreSearch:true}).then(hit=>hit||caches.match('./index.html'))));
   }else if(CDN.includes(url.hostname)){
     // Model and fonts: saved copy first, download only once

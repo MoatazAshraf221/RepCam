@@ -11,16 +11,16 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="RepCam">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#15122B">
+<meta name="theme-color" content="#2C2856">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://storage.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Midnight theme: deep indigo ground, coral accent */
+  /* Indigo theme, lightened: mid-indigo ground, coral accent */
   :root{
-    --bg:#15122B;--card:#241F45;--row:#1D1938;--badge:#332C5E;--line:#3A3368;--dash:#4A4378;--txt:#F3F1FF;--mut:#B4AED6;
-    --acc:#FF7A59;--on-acc:#15122B;--btn:#2E2856;--field:#1D1938;--red:#FF5A5F;--warn:#FFC98A;
+    --bg:#2C2856;--card:#3D3876;--row:#353068;--badge:#4F4990;--line:#5A54A0;--dash:#6E68B4;--txt:#FFFFFF;--mut:#D5D1F0;
+    --acc:#FF8A6B;--on-acc:#1E1A3F;--btn:#4A448A;--field:#353068;--red:#FF6B70;--warn:#FFD7A3;
     --disp:'Sora',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
     --body:'Sora',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   }
@@ -114,15 +114,15 @@
   #nav{position:fixed;left:0;right:0;bottom:0;z-index:4;pointer-events:none}
   #nav[hidden]{display:none}
   #nav>*{pointer-events:auto}
-  .navbar{position:relative;max-width:560px;margin:0 auto;height:calc(90px + env(safe-area-inset-bottom));padding:0 40px calc(8px + env(safe-area-inset-bottom));background:var(--card);border-radius:30px 30px 0 0;display:flex;align-items:center;justify-content:space-between;box-shadow:0 -10px 30px rgba(8,6,20,.45)}
+  .navbar{position:relative;max-width:560px;margin:0 auto;height:calc(90px + env(safe-area-inset-bottom));padding:0 40px calc(8px + env(safe-area-inset-bottom));background:var(--card);border-radius:30px 30px 0 0;display:flex;align-items:center;justify-content:space-between;box-shadow:0 -10px 30px rgba(14,11,40,.32)}
   .tab{background:none;padding:6px;min-width:68px;min-height:54px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;color:var(--mut);border-radius:14px}
   .tab.on{color:var(--acc)}
   #startBtn{position:absolute;left:50%;top:-30px;margin-left:-41px;width:82px;height:82px;border-radius:50%;border:6px solid var(--bg);background:var(--acc);display:grid;place-items:center;padding:0}
   #startBtn i{width:26px;height:26px;border-radius:50%;background:var(--on-acc)}
   #startLbl{position:absolute;left:0;right:0;bottom:calc(11px + env(safe-area-inset-bottom));text-align:center;font-size:12px;font-weight:600;pointer-events:none}
-  #homeMsg{max-width:520px;margin:0 20px 44px;padding:12px 16px;border-radius:16px;background:var(--card);text-align:center;box-shadow:0 6px 24px rgba(8,6,20,.5)}
+  #homeMsg{max-width:520px;margin:0 20px 44px;padding:12px 16px;border-radius:16px;background:var(--card);text-align:center;box-shadow:0 6px 24px rgba(14,11,40,.4)}
   #homeMsg:empty{display:none}
-  .sheet{position:fixed;inset:0;z-index:5;background:rgba(8,6,20,.62);display:flex;align-items:flex-end}
+  .sheet{position:fixed;inset:0;z-index:5;background:rgba(14,11,40,.55);display:flex;align-items:flex-end}
   .sheet[hidden]{display:none}
   .sheet>div{background:var(--bg);width:100%;max-width:560px;margin:0 auto;border-radius:28px 28px 0 0;padding:22px 20px calc(20px + env(safe-area-inset-bottom));max-height:84vh;overflow:auto;animation:up .2s ease-out}
   @keyframes up{from{transform:translateY(30px);opacity:0}}
@@ -131,32 +131,32 @@
   .pick b{font:600 16px/1.2 var(--disp)}
 
   /* ---- session (over the camera) ---- */
-  #session{--mut:#CFCAEA;color:var(--txt);padding:0;max-width:none;position:fixed;inset:0;background:#0C0A1A}
+  #session{--mut:#E2DFF5;color:var(--txt);padding:0;max-width:none;position:fixed;inset:0;background:#17142E}
   #session[data-phase="rec"] #quitBtn,#session[data-phase="cd"] #quitBtn,#session[data-phase="rec"] #flipBtn,#session[data-phase="cd"] #flipBtn{display:none}
   #stage{position:absolute;inset:0;overflow:hidden}
   #stage.mirror video,#stage.mirror canvas{transform:scaleX(-1)}
   #cam,#overlay{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover}
-  #hud{position:absolute;top:0;left:0;right:0;padding:calc(16px + env(safe-area-inset-top)) 18px 46px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;background:linear-gradient(#0C0A1AE6,#0C0A1A00)}
+  #hud{position:absolute;top:0;left:0;right:0;padding:calc(16px + env(safe-area-inset-top)) 18px 46px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;background:linear-gradient(#17142EB3,#17142E00)}
   #hud .t{font:700 22px/1.2 var(--disp)} #hud .s{font-size:14px;color:#D6D2EE;margin-top:2px}
   #recdot{display:none;align-items:center;gap:7px;font-weight:600;font-size:13px;color:#fff;margin-top:6px}
   #recdot i{width:10px;height:10px;border-radius:50%;background:var(--acc);animation:bl 1s infinite}
   @keyframes bl{50%{opacity:.2}}
-  #big{position:absolute;left:0;right:0;top:50%;transform:translateY(-60%);text-align:center;font:700 44vmin/1 var(--disp);letter-spacing:-.04em;color:#fff;text-shadow:0 4px 30px #0C0A1ACC;pointer-events:none}
+  #big{position:absolute;left:0;right:0;top:50%;transform:translateY(-60%);text-align:center;font:700 44vmin/1 var(--disp);letter-spacing:-.04em;color:#fff;text-shadow:0 4px 30px #17142ECC;pointer-events:none}
   #big.time{font-size:30vmin}
-  #big small{display:block;font:600 5vmin/1.4 var(--disp);letter-spacing:0;color:#FF9A80}
-  #hud button{white-space:nowrap;flex:none;background:#241F45CC}
-  #big .note{display:block;width:fit-content;margin:2.5vmin auto 0;padding:1.6vmin 3.6vmin;border-radius:99px;background:#241F45F2;color:#fff;font:600 4.2vmin/1.2 var(--body);letter-spacing:0;text-shadow:none}
+  #big small{display:block;font:600 5vmin/1.4 var(--disp);letter-spacing:0;color:#FFB09A}
+  #hud button{white-space:nowrap;flex:none;background:#3D3876D9}
+  #big .note{display:block;width:fit-content;margin:2.5vmin auto 0;padding:1.6vmin 3.6vmin;border-radius:99px;background:#3D3876F2;color:#fff;font:600 4.2vmin/1.2 var(--body);letter-spacing:0;text-shadow:none}
   #big .note.beat{background:var(--acc);color:var(--on-acc)}
-  .lastbox{display:flex;justify-content:space-between;align-items:baseline;background:#1D1938F2;border-radius:16px;padding:12px 16px;margin-bottom:8px;font-size:14px;color:var(--mut)}
+  .lastbox{display:flex;justify-content:space-between;align-items:baseline;background:#353068F2;border-radius:16px;padding:12px 16px;margin-bottom:8px;font-size:14px;color:var(--mut)}
   .lastbox b{font:600 20px/1 var(--disp);color:var(--acc)}
   #verdict{margin:10px 2px 0;font-size:14px;font-weight:600;min-height:22px}
   #verdict.up{color:var(--acc)}
-  #panel{position:absolute;left:0;right:0;bottom:0;padding:60px 18px calc(22px + env(safe-area-inset-bottom));background:linear-gradient(#0C0A1A00,#0C0A1AF2 46%)}
+  #panel{position:absolute;left:0;right:0;bottom:0;padding:60px 18px calc(22px + env(safe-area-inset-bottom));background:linear-gradient(#17142E00,#17142EC7 50%)}
   #status{font-size:14px;color:#D6D2EE;margin-bottom:8px;min-height:18px}
-  .step{display:flex;align-items:center;gap:8px;background:#1D1938F2;border-radius:16px;padding:6px}
+  .step{display:flex;align-items:center;gap:8px;background:#353068F2;border-radius:16px;padding:6px}
   .step b{flex:1;text-align:center;font:600 22px/1 var(--disp)}
   .step button{width:52px;padding:10px 0;font-size:22px;border-radius:12px}
-  .skipb{flex:1;padding:13px 8px;font-size:14px;background:#2E2856CC}
+  .skipb{flex:1;padding:13px 8px;font-size:14px;background:#4A448AD9}
   .lbl{font-size:13px;color:var(--mut);margin:8px 0 4px}
   .stopwrap{display:flex;flex-direction:column;align-items:center;gap:10px;font-size:15px;font-weight:600}
   .stopbtn{width:96px;height:96px;border-radius:50%;border:5px solid var(--txt);background:none;padding:0;display:grid;place-items:center}
@@ -172,7 +172,7 @@
   #reelOut video{width:100%;border-radius:18px;margin-top:10px;background:#000}
 
   /* ---- opening screen: the icon on a dark field until the app is ready ---- */
-  #splash{position:fixed;inset:0;z-index:50;background:#15122B;display:grid;place-items:center;transition:opacity .45s ease}
+  #splash{position:fixed;inset:0;z-index:50;background:#2C2856;display:grid;place-items:center;transition:opacity .45s ease}
   #splash svg{width:36vmin;max-width:200px;animation:splashin .55s cubic-bezier(.2,.8,.3,1) both;transition:transform .45s ease}
   #splash.out{opacity:0;pointer-events:none}
   #splash.out svg{transform:scale(1.1)}
@@ -221,9 +221,9 @@
   <section class="today">
     <div class="hero">
       <svg width="72" height="72" viewBox="0 0 76 76" role="img" aria-label="Sets in this workout">
-        <circle cx="38" cy="38" r="31" fill="none" stroke="#3A3368" stroke-width="9"/>
-        <circle id="ringArc" cx="38" cy="38" r="31" fill="none" stroke="#FF7A59" stroke-width="9" stroke-linecap="round" stroke-dasharray="0 195" transform="rotate(-90 38 38)"/>
-        <text id="ringNum" x="38" y="45.5" text-anchor="middle" font-family="Sora, system-ui, sans-serif" font-size="22" font-weight="700" fill="#F3F1FF"></text>
+        <circle cx="38" cy="38" r="31" fill="none" style="stroke:var(--line)" stroke-width="9"/>
+        <circle id="ringArc" cx="38" cy="38" r="31" fill="none" style="stroke:var(--acc)" stroke-width="9" stroke-linecap="round" stroke-dasharray="0 195" transform="rotate(-90 38 38)"/>
+        <text id="ringNum" x="38" y="45.5" text-anchor="middle" font-family="Sora, system-ui, sans-serif" font-size="22" font-weight="700" style="fill:var(--txt)"></text>
       </svg>
       <div style="min-width:0"><div id="heroMain"></div><div id="planMeta"></div></div>
     </div>
@@ -481,7 +481,7 @@ function reelSegments(set,opt){
 }
 /*</core>*/
 
-const APP_VERSION='v11'; // shown at the bottom of the home screen
+const APP_VERSION='v12'; // shown at the bottom of the home screen
 const $=id=>document.getElementById(id);
 function replay(el,c){if(!el)return;el.classList.remove(c);void el.offsetWidth;el.classList.add(c);}
 const store={
@@ -750,21 +750,14 @@ const buzz=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}};
 /* ---------- CAMERA + POSE ---------- */
 const cam=$('cam'), overlay=$('overlay'), octx=overlay.getContext('2d');
 let stream=null, facing='user', landmarker=null, poseReady=false, loopOn=false, lastVT=-1, lastDetect=0;
-let bodySeen=false, fitKey='';
-// Scale the camera picture to cover the whole screen, whatever size the phone's camera reports.
-// iPhones can change the picture size when a recording starts or stops, so this is re-checked constantly
-// instead of leaving it to the browser's own layout.
-function fitStage(){
-  const vw=cam.videoWidth, vh=cam.videoHeight, st=$('stage'), W=st.clientWidth, H=st.clientHeight;
-  if(!vw||!vh||!W||!H) return;
-  const key=[vw,vh,W,H].join('x'); if(key===fitKey) return; fitKey=key;
-  const s=Math.max(W/vw,H/vh), w=Math.ceil(vw*s), hh=Math.ceil(vh*s);
-  for(const el of [cam,overlay]){el.style.objectFit='fill';el.style.width=w+'px';el.style.height=hh+'px';el.style.left=Math.round((W-w)/2)+'px';el.style.top=Math.round((H-hh)/2)+'px';}
+let bodySeen=false;
+// The camera picture is scaled by the browser itself (object-fit: cover), which keeps its proportions.
+// If the preview stalls or shrinks after a recording, re-attaching the camera makes the browser lay it out again.
+function wakePreview(){
+  if(!stream) return;
+  try{cam.srcObject=null;cam.srcObject=stream;}catch(e){}
+  cam.play().catch(()=>{});
 }
-['resize','loadedmetadata','playing'].forEach(ev=>cam.addEventListener(ev,()=>{fitKey='';fitStage();}));
-window.addEventListener('resize',()=>{fitKey='';fitStage();});
-// The preview can stall when a recording stops; make sure it is running again
-function wakePreview(){ if(stream&&cam.srcObject!==stream) cam.srcObject=stream; if(cam.paused) cam.play().catch(()=>{}); fitKey=''; fitStage(); }
 async function startCamera(){
   if(stream) stream.getTracks().forEach(t=>t.stop());
   stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}},audio:false});
@@ -808,7 +801,7 @@ function drawPose(lm,tris){
   octx.lineWidth=Math.max(3,w/200); octx.strokeStyle='#ffffffaa';
   for(const [a,b] of BONES){const p=lm[a],q=lm[b];if((p.visibility??1)<.5||(q.visibility??1)<.5)continue;
     octx.beginPath();octx.moveTo(p.x*w,p.y*h);octx.lineTo(q.x*w,q.y*h);octx.stroke();}
-  octx.strokeStyle='#FF7A59';octx.lineWidth=Math.max(5,w/120);
+  octx.strokeStyle='#FF8A6B';octx.lineWidth=Math.max(5,w/120);
   for(const tri of tris||[]){octx.beginPath();
     tri.forEach((i,k)=>{const p=lm[i];k?octx.lineTo(p.x*w,p.y*h):octx.moveTo(p.x*w,p.y*h)});octx.stroke();}
 }
@@ -817,7 +810,6 @@ function loop(){
   requestAnimationFrame(loop);
   const now=performance.now();
   if(!cam.videoWidth) return;
-  fitStage();
   if(overlay.width!==cam.videoWidth){overlay.width=cam.videoWidth;overlay.height=cam.videoHeight;}
   if(poseReady&&cam.currentTime!==lastVT&&now-lastDetect>60){
     lastVT=cam.currentTime; lastDetect=now;
@@ -1179,7 +1171,7 @@ $('reelBtn').onclick=async()=>{
   const sp=$('splash'), t0=performance.now(); if(!sp) return;
   const hide=()=>setTimeout(()=>{
     sp.classList.add('out');
-    const tc=document.querySelector('meta[name="theme-color"]'); if(tc) tc.content='#15122B';
+    const tc=document.querySelector('meta[name="theme-color"]'); if(tc) tc.content='#2C2856';
     setTimeout(()=>sp.remove(),500);
   },Math.max(0,900-(performance.now()-t0)));
   // wait for the fonts (2 s at most) so the home screen doesn't shift after it appears

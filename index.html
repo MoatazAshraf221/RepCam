@@ -94,6 +94,8 @@
   .exacts{display:flex;gap:8px;margin-top:12px}
   .exacts button{flex:1;padding:11px 4px;font-size:14px;border-radius:10px;white-space:nowrap}
   .exacts .del{color:var(--red);background:none;border:1px solid var(--line)}
+  .clr{width:100%;margin-top:8px;padding:10px;font-size:14px;border-radius:10px;background:none;border:1px solid var(--line);color:var(--mut)}
+  .clr.sure{color:var(--red);border-color:var(--red)}
   .addrow{display:flex;align-items:center;gap:12px;width:100%;background:none;padding:6px 0;text-align:left;font-weight:600;position:relative}
   .addrow .num{background:var(--bg);color:var(--txt);border:2px dashed var(--mut);font-size:22px}
   .empty{margin-left:48px;color:var(--mut);padding:6px 0 12px}
@@ -149,6 +151,7 @@
   .step{display:flex;align-items:center;gap:8px;background:#0f1216e6;border:1px solid var(--line);border-radius:12px;padding:6px}
   .step b{flex:1;text-align:center;font:600 26px/1 var(--disp)}
   .step button{width:52px;padding:10px 0;font-size:22px}
+  .skipb{flex:1;padding:12px 8px;font-size:15px;background:#262c36cc}
   .lbl{font-size:13px;color:var(--mut);margin:8px 0 4px}
 
   /* ---- summary ---- */
@@ -246,7 +249,7 @@
   </div>
   <div id="hud">
     <div><div class="t" id="hudEx"></div><div class="s" id="hudSet"></div><div id="recdot"><i></i>REC</div></div>
-    <div class="row"><button id="flipBtn" class="sm">Flip</button><button id="quitBtn" class="sm">End workout</button></div>
+    <div class="row"><button id="flipBtn" class="sm">Flip</button><button id="quitBtn" class="sm">Cancel</button></div>
   </div>
   <div id="big"></div>
   <div id="panel"><div id="status"></div><div id="panelBody"></div></div>
@@ -424,7 +427,7 @@ function reelSegments(set,opt){
 }
 /*</core>*/
 
-const APP_VERSION='v7'; // keep in step with VERSION in sw.js
+const APP_VERSION='v8'; // keep in step with VERSION in sw.js
 const $=id=>document.getElementById(id);
 function replay(el,c){if(!el)return;el.classList.remove(c);void el.offsetWidth;el.classList.add(c);}
 const store={
@@ -483,7 +486,7 @@ function completeDay(idx){
   routine.done={date:t,idx}; routine.next=(idx+1)%n; routine.nextFrom=addDays(t,1);
   sel=idx; openRow=-1; setPlan(); saveRoutine();
 }
-let sel=todayIdx(), openRow=-1, justOpened=false, lastBump=null;
+let sel=todayIdx(), openRow=-1, justOpened=false, lastBump=null, confirmClear=null;
 const saveRoutine=()=>store.set('rc_routine',routine);
 const curWorkout=()=>routine.workouts[routine.cycle[sel]]||null;
 function setPlan(){const w=curWorkout();plan=w?w.plan:[];}
@@ -531,6 +534,7 @@ function renderPlan(){
       ${i===openRow?`<div class="exedit${justOpened?' anim':''}">
         ${stepper('Sets','sets',p.sets,i)}${stepper('Weight','weight',fmtW(p.weight),i)}${stepper('Rest','rest',fmtRest(p.rest),i)}
         <div class="exacts"><button data-act="up" data-i="${i}" ${i===0?'disabled':''}>Move up</button><button data-act="down" data-i="${i}" ${i===plan.length-1?'disabled':''}>Move down</button><button class="del" data-act="del" data-i="${i}">Remove</button></div>
+        ${lastSets(p.key)?`<button class="clr${confirmClear===p.key?' sure':''}" data-act="clear" data-i="${i}">${confirmClear===p.key?'Tap again to clear':'Clear history'}</button>`:''}
       </div>`:''}
     </li>`).join('')||'<li class="empty">No exercises yet.</li>';
   $('startBtn').innerHTML='<i></i>Start workout'; $('startBtn').disabled=!plan.length;
@@ -555,6 +559,7 @@ function bump(obj,f,d){const [lo,hi,st]=LIMITS[f];obj[f]=Math.min(hi,Math.max(lo
 $('home').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
   const d=b.dataset;
+  if(d.act!=='clear') confirmClear=null;
   if(d.day!=null){if(+d.day!==sel){sel=+d.day;openRow=-1;setPlan();renderPlan();replay(document.querySelector('.today'),'swap');}return;}
   if(d.open!=null){const i=+d.open;openRow=openRow===i?-1:i;justOpened=true;renderPlan();justOpened=false;return;}
   if(d.f){
@@ -565,6 +570,11 @@ $('home').addEventListener('click',e=>{
   }
   if(d.act){
     const i=+d.i, a=d.act;
+    if(a==='clear'){
+      const key=plan[i].key;
+      if(confirmClear!==key) confirmClear=key;
+      else{clearHistory(key);confirmClear=null;renderHistory();}
+    }
     if(a==='del'){plan.splice(i,1);openRow=-1;}
     if(a==='up'&&i>0){[plan[i-1],plan[i]]=[plan[i],plan[i-1]];openRow=i-1;}
     if(a==='down'&&i<plan.length-1){[plan[i+1],plan[i]]=[plan[i],plan[i+1]];openRow=i+1;}
@@ -598,6 +608,13 @@ $('addBtn').onclick=()=>{
 };
 $('sheetClose').onclick=()=>{$('sheet').hidden=true;};
 $('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))$('sheet').hidden=true;});
+// Remove every logged set of one exercise (its "last time" numbers go with it)
+function clearHistory(key){
+  const name=LIB[key].name;
+  const h=store.get('rc_history',[]);
+  h.forEach(s=>{s.ex=s.ex.filter(e=>!(e.key?e.key===key:e.name===name));});
+  store.set('rc_history',h.filter(s=>s.ex.length));
+}
 function renderHistory(){
   const h=store.get('rc_history',[]), wk=h.filter(s=>Date.now()-s.date<7*864e5).length;
   $('week').textContent=wk?`${wk} ${wk===1?'workout':'workouts'} this week`:'';
@@ -731,7 +748,9 @@ function hud(){
   const ex=curEx(); if(!ex) return;
   $('hudEx').textContent=LIB[ex.key].name;
   $('hudSet').textContent=`Set ${sess.si+1} of ${ex.sets}, ${fmtW(ex.weight)}`;
-  const ls=lastSets(ex.key); sess.last=(ls&&ls[sess.si])||null;
+  const ls=lastSets(ex.key);
+  sess.last=ls?(ls.some(x=>x.n!=null)?ls.find(x=>x.n===sess.si+1):ls[sess.si])||null:null;
+  $('quitBtn').textContent=sess.sets.length?'End workout':'Cancel';
 }
 function pickMime(){
   const c=['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
@@ -754,6 +773,7 @@ $('flipBtn').onclick=async()=>{if(phase==='rec')return;facing=facing==='user'?'e
 $('quitBtn').onclick=()=>{
   if(phase==='rec'||phase==='cd') return;
   const n=sess.sets.length;
+  if(!n&&phase!=='confirm'){cancelSession();return;}
   $('quitMsg').textContent=(n?`Your ${n} saved ${n===1?'set is':'sets are'} kept.`:'No sets are saved yet.')+(phase==='confirm'?' The set you just recorded is not saved.':'');
   $('quitSheet').hidden=false;
 };
@@ -767,8 +787,18 @@ function toReady(newExercise){
   const ex=curEx();
   $('panelBody').innerHTML=`${newExercise?`<div class="lbl">${LIB[ex.key].gap?'Face the camera':'Stand side-on to the camera'}</div>`:''}
     ${sess.last?`<div class="lastbox"><span>Set ${sess.si+1} last time</span><b>${fmtW(sess.last.w)} × ${sess.last.r}</b></div>`:''}
-    <button class="pri big" id="goBtn">Start set ${sess.si+1}</button>`;
+    <button class="pri big" id="goBtn">Start set ${sess.si+1}</button>
+    <div class="row" style="margin-top:8px"><button class="skipb" id="skipSet">Skip set</button><button class="skipb" id="skipEx">Skip exercise</button></div>`;
   $('goBtn').onclick=countdown;
+  $('skipSet').onclick=()=>skip(false);
+  $('skipEx').onclick=()=>skip(true);
+}
+// Move on without recording: to the next set, or straight to the next exercise
+function skip(wholeExercise){
+  const ex=curEx(); let newEx=false;
+  if(!wholeExercise&&sess.si+1<ex.sets) sess.si++; else{sess.ei++;sess.si=0;newEx=true;}
+  if(!curEx()) return finish();
+  toReady(newEx);
 }
 function countdown(){
   setPh('cd'); let n=settings.cd; $('panelBody').innerHTML='<button class="big" id="cxBtn">Cancel</button>';
@@ -840,6 +870,13 @@ function rest(sec,newEx){
   };
   clearInterval(timer); if(sec<=0) return over(); tick(); timer=setInterval(tick,250);
 }
+// Leave the recording screen without logging anything
+function cancelSession(){
+  clearInterval(timer); setPh('idle'); loopOn=false;
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  try{wake&&wake.release();}catch(e){}
+  show('home'); renderPlan();
+}
 function finish(){
   clearInterval(timer); setPh('idle'); loopOn=false;
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
@@ -847,7 +884,7 @@ function finish(){
   const byEx=[]; for(const s of sess.sets){let g=byEx.find(x=>x.key===s.key);if(!g){g={key:s.key,name:s.name,sets:[]};byEx.push(g);}g.sets.push(s);}
   if(sess.sets.length){
     const h=store.get('rc_history',[]);
-    h.unshift({date:sess.date,day:sess.name,ex:byEx.map(g=>({key:g.key,name:g.name,sets:g.sets.map(s=>({w:s.w,r:s.r}))}))});
+    h.unshift({date:sess.date,day:sess.name,ex:byEx.map(g=>({key:g.key,name:g.name,sets:g.sets.map(s=>({w:s.w,r:s.r,n:s.set}))}))});
     store.set('rc_history',h.slice(0,50));
     completeDay(sess.idx);
   }

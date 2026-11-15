@@ -3,8 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>RepCam prototype</title>
+<title>RepCam</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RepCam">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#ECEEE9">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://storage.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <style>
@@ -205,11 +214,9 @@
 
   <div class="sheet" id="splitSheet" hidden><div role="dialog" aria-label="Edit split">
     <h2>Your split</h2>
-    <p class="sub">The days repeat in this order. Finishing a day moves you on to the next one.</p>
     <div id="splitRows"></div>
     <button class="addrow" data-split="add"><span class="num">+</span>Add day</button>
     <h2 style="margin-top:22px">Workouts</h2>
-    <p class="sub">Rename a workout, or add a new one to use in your split.</p>
     <div id="wkRows"></div>
     <div class="row" style="margin-bottom:16px"><input id="newWk" placeholder="New workout name" aria-label="New workout name"><button class="sm" data-split="newwk" style="flex:none">Add</button></div>
     <button class="pri big" id="splitDone">Done</button>
@@ -241,11 +248,10 @@
   <p class="sub" id="sumSub"></p>
   <div id="sumBody"></div>
   <h2>Highlight reel</h2>
-  <p class="sub">The top set of each exercise, cut to the first 3 reps and the last rep, with no text on the video. It renders in real time, so keep this tab open.</p>
   <button id="reelBtn" class="pri big">Build highlight reel</button>
   <div id="reelOut"></div>
   <button id="homeBtn" class="big" style="margin-top:22px">Back to home</button>
-  <p class="warn">Clips live in memory only. Download what you want before closing or reloading this page.</p>
+  <p class="sub" style="margin-top:12px">Download clips before closing this page.</p>
 </div>
 
 <script>
@@ -436,7 +442,7 @@ function renderPlan(){
   $('dayTitle').textContent=w?w.name:'Rest day';
   if(!w){
     const nw=routine.workouts[routine.cycle[(sel+1)%n]];
-    $('planMeta').textContent=`${dayLabel()}. Nothing to record. ${nw?nw.name:'Another rest day'} comes next.`;
+    $('planMeta').textContent=`${dayLabel()}. ${nw?nw.name:'Rest'} is next.`;
     $('plan').innerHTML=''; $('addBtn').style.display='none';
     $('startBtn').innerHTML='Rest day done'; $('startBtn').disabled=false;
     return;
@@ -454,14 +460,14 @@ function renderPlan(){
         ${stepper('Sets','sets',p.sets,i)}${stepper('Weight','weight',fmtW(p.weight),i)}${stepper('Rest','rest',fmtRest(p.rest),i)}
         <div class="exacts"><button data-act="up" data-i="${i}" ${i===0?'disabled':''}>Move up</button><button data-act="down" data-i="${i}" ${i===plan.length-1?'disabled':''}>Move down</button><button class="del" data-act="del" data-i="${i}">Remove</button></div>
       </div>`:''}
-    </li>`).join('')||'<li class="empty">Add your first exercise to build this workout.</li>';
+    </li>`).join('')||'<li class="empty">No exercises yet.</li>';
   $('startBtn').innerHTML='<i></i>Start workout'; $('startBtn').disabled=!plan.length;
   $('addBtn').style.display=plan.length<Object.keys(LIB).length?'':'none';
   saveRoutine();
 }
 function renderSettings(){
-  $('settings').innerHTML=stepper('Countdown before recording','cd',settings.cd+' s','s')+
-    stepper('End the set automatically','idle',settings.idle?`${settings.idle} s`:'Off','s','after this long without movement');
+  $('settings').innerHTML=stepper('Countdown','cd',settings.cd+' s','s')+
+    stepper('Auto-end set when idle','idle',settings.idle?`${settings.idle} s`:'Off','s');
 }
 function renderSplit(){
   const opts=id=>Object.entries(routine.workouts).map(([k,w])=>`<option value="${k}"${k===id?' selected':''}>${esc(w.name)}</option>`).join('')+`<option value=""${id?'':' selected'}>Rest</option>`;
@@ -525,9 +531,10 @@ function renderHistory(){
   $('history').innerHTML=h.length?h.slice(0,8).map(s=>{const d=new Date(s.date);
     return `<div class="hrow"><div class="hdate">${d.toLocaleDateString(undefined,{day:'numeric',month:'short'})}<small>${d.toLocaleDateString(undefined,{weekday:'long'})}</small></div>
     <div class="hlines">${s.day?`<span class="hday">${esc(s.day)}</span>`:''}${s.ex.map(e=>`<b>${e.name}</b> ${e.sets.map(x=>`${x.w||'BW'}×${x.r}`).join(', ')}`).join('<br>')}</div></div>`;}).join('')
-    :'<p class="sub">Your finished workouts show up here, with the weight and reps of every set.</p>';
+    :'<p class="sub">None yet.</p>';
 }
 setPlan(); renderPlan(); renderSettings(); renderHistory();
+setTimeout(()=>loadPose(),300); // start loading the rep counter while the home screen is showing
 
 /* ---------- SOUND ---------- */
 let actx=null;
@@ -549,9 +556,11 @@ async function startCamera(){
   cam.srcObject=stream; await cam.play().catch(()=>{});
   $('stage').classList.toggle('mirror',facing==='user');
 }
-async function loadPose(){
+let poseLoading=null;
+function loadPose(){return poseLoading||(poseLoading=loadPoseOnce().finally(()=>{if(!poseReady)poseLoading=null;}));}
+async function loadPoseOnce(){
   if(landmarker||poseReady) return;
-  setStatus('Loading rep-counting model…');
+  setStatus('Loading rep counter…');
   try{
     const V='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
     const {PoseLandmarker,FilesetResolver}=await import(V+'/vision_bundle.mjs');
@@ -559,9 +568,11 @@ async function loadPose(){
     const opt=d=>({baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:d},runningMode:'VIDEO',numPoses:1});
     try{landmarker=await PoseLandmarker.createFromOptions(fs,opt('GPU'));}
     catch(e){landmarker=await PoseLandmarker.createFromOptions(fs,opt('CPU'));}
+    // run one throwaway detection so the first real frame is not the slow one
+    try{const w=document.createElement('canvas');w.width=w.height=192;w.getContext('2d').fillRect(0,0,192,192);landmarker.detectForVideo(w,performance.now());}catch(e){}
     poseReady=true; setStatus('');
   }catch(e){
-    console.error(e); setStatus('Rep counter could not load (needs internet). You can still record and enter reps by hand.');
+    console.error(e); setStatus('Rep counter could not load. Enter reps by hand.');
   }
 }
 const BONES=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
@@ -599,7 +610,7 @@ function loop(){
     const t=(now-recT0)/1000;
     if(settings.idle>0&&counter.reps.length>0&&counter.idleFor(t)>settings.idle) endSet(true);
   }
-  if(phase==='ready'&&poseReady) setStatus(bodySeen?'Body detected. Make sure the whole movement stays in frame.':'Step back until your whole body is in frame.');
+  if(phase==='ready'&&poseReady) setStatus(bodySeen?'':'Step back so your whole body is in frame.');
 }
 
 /* ---------- SESSION ---------- */
@@ -651,6 +662,7 @@ $('startBtn').onclick=async()=>{
   sess={date:Date.now(),name:curWorkout().name,plan:plan.filter(p=>p.sets>0).map(p=>({...p})),ei:0,si:0,sets:[]};
   show('session'); loopOn=true; loop(); toReady(true);
   try{wake=await navigator.wakeLock.request('screen');}catch(e){}
+  if(!poseReady) setStatus('Loading rep counter…');
   loadPose();
 };
 $('flipBtn').onclick=async()=>{if(phase==='rec')return;facing=facing==='user'?'environment':'user';try{await startCamera();}catch(e){}};
@@ -668,7 +680,7 @@ function toReady(newExercise){
   setPh('ready'); clearInterval(timer); hud(); showBig('');
   $('recdot').style.display='none';
   const ex=curEx();
-  $('panelBody').innerHTML=`${newExercise?`<div class="lbl">${LIB[ex.key].name}: prop your phone so the whole movement stays in frame. ${LIB[ex.key].gap?'Face the camera for this one.':'Side-on works best.'}</div>`:''}
+  $('panelBody').innerHTML=`${newExercise?`<div class="lbl">${LIB[ex.key].gap?'Face the camera':'Stand side-on to the camera'}</div>`:''}
     ${sess.last?`<div class="lastbox"><span>Set ${sess.si+1} last time</span><b>${fmtW(sess.last.w)} × ${sess.last.r}</b></div>`:''}
     <button class="pri big" id="goBtn">Start set ${sess.si+1}</button>`;
   $('goBtn').onclick=countdown;
@@ -676,7 +688,7 @@ function toReady(newExercise){
 function countdown(){
   setPh('cd'); let n=settings.cd; $('panelBody').innerHTML='<button class="big" id="cxBtn">Cancel</button>';
   $('cxBtn').onclick=()=>{clearInterval(timer);toReady(false);};
-  setStatus('Get into position…'); showBig(n); beep(660);
+  setStatus(''); showBig(n); beep(660);
   timer=setInterval(()=>{n--; if(n>0){showBig(n);beep(660);}else{clearInterval(timer);startSet();}},1000);
 }
 function startSet(){
@@ -690,7 +702,7 @@ function startSet(){
   }catch(e){recorder=null;}
   recT0=performance.now(); setPh('rec'); beep(1320,300); buzz(200);
   $('recdot').style.display='flex'; showReps(0);
-  setStatus(poseReady?'Counting reps. Tap End set when done.':'Recording. Rep counter unavailable, enter reps after the set.');
+  setStatus(poseReady?'':'Rep counter unavailable');
   $('panelBody').innerHTML='<button class="red big" id="endBtn">End set</button>';
   $('endBtn').onclick=()=>endSet(false);
 }
@@ -707,12 +719,12 @@ function endSet(auto){
 }
 function confirmSet(rec){
   const ex=curEx(); let r=rec.reps.length, w=ex.weight;
-  showBig(''); setStatus(rec.auto?'Set ended automatically (no movement).':'');
+  showBig(''); setStatus(rec.auto?'Ended automatically':'');
   $('panelBody').innerHTML=`
     <div class="row"><div class="grow"><div class="lbl">Reps</div><div class="step"><button id="rm">−</button><b id="rv"></b><button id="rp">+</button></div></div>
     <div class="grow"><div class="lbl">Weight (kg)</div><div class="step"><button id="wm">−</button><b id="wv"></b><button id="wp">+</button></div></div></div>
     <div id="verdict"></div>
-    <label class="row" style="margin:10px 2px;font-size:14px"><input type="checkbox" id="warm" style="width:auto"> Warm-up set (leave out of reel)</label>
+    <label class="row" style="margin:10px 2px;font-size:14px"><input type="checkbox" id="warm" style="width:auto"> Warm-up set</label>
     <div class="row"><button class="big" id="redo" style="flex:1">Discard</button><button class="pri big" id="save" style="flex:2">Save set</button></div>`;
   const paint=()=>{$('rv').textContent=r;$('wv').textContent=w;const v=verdict(w,r);$('verdict').textContent=v.t;$('verdict').classList.toggle('up',!!v.up);}; paint();
   $('rm').onclick=()=>{r=Math.max(0,r-1);paint();}; $('rp').onclick=()=>{r++;paint();};
@@ -730,15 +742,15 @@ function confirmSet(rec){
 }
 function rest(sec,newEx){
   setPh('rest'); hud(); let end=Date.now()+sec*1000;
-  const L=sess.last, tgt=L?` Set ${sess.si+1} last time: ${fmtW(L.w)} × ${L.r}.`:'';
-  setStatus(newEx?`Next up: ${LIB[curEx().key].name}. Reposition your phone during the rest.`:`Rest.${tgt}`);
+  const L=sess.last;
+  setStatus(newEx?`Next: ${LIB[curEx().key].name}`:(L?`Last time: ${fmtW(L.w)} × ${L.r}`:''));
   $('panelBody').innerHTML='<div class="row"><button class="big" id="more" style="flex:1">+30s</button><button class="pri big" id="skip" style="flex:2">Skip rest</button></div>';
   $('more').onclick=()=>{end+=30000;tick();};
   const over=()=>{clearInterval(timer);toReady(newEx);};
   $('skip').onclick=over;
   const tick=()=>{
     const left=Math.ceil((end-Date.now())/1000);
-    if(left<=0){beep(880,200);setTimeout(()=>beep(1175,350),220);buzz([200,100,200,100,400]);over();setStatus('Rest over. Ready when you are.');return;}
+    if(left<=0){beep(880,200);setTimeout(()=>beep(1175,350),220);buzz([200,100,200,100,400]);over();return;}
     showBig(`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`,'REST');
   };
   clearInterval(timer); if(sec<=0) return over(); tick(); timer=setInterval(tick,250);
@@ -813,6 +825,8 @@ $('reelBtn').onclick=async()=>{
   }
   btn.disabled=false;
 };
+
+if('serviceWorker' in navigator) window.addEventListener('load',()=>{navigator.serviceWorker.register('./sw.js').catch(()=>{});});
 </script>
 </body>
 </html>

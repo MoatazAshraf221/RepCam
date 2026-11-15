@@ -136,7 +136,6 @@
   #stage{position:absolute;inset:0;overflow:hidden}
   #stage.mirror video,#stage.mirror canvas{transform:scaleX(-1)}
   #cam,#overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-  #dbg{font:400 10px/1.3 ui-monospace,Menlo,monospace;color:#fff;opacity:.75;margin-top:6px}
   #hud{position:absolute;top:0;left:0;right:0;padding:calc(16px + env(safe-area-inset-top)) 18px 46px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;background:linear-gradient(#17142EB3,#17142E00)}
   #hud .t{font:700 22px/1.2 var(--disp)} #hud .s{font-size:14px;color:#D6D2EE;margin-top:2px}
   #recdot{display:none;align-items:center;gap:7px;font-weight:600;font-size:13px;color:#fff;margin-top:6px}
@@ -178,14 +177,37 @@
   #splash.out{opacity:0;pointer-events:none}
   #splash.out svg{transform:scale(1.1)}
   @keyframes splashin{from{opacity:0;transform:scale(.86)}}
-  /* ---- motion: short, and only in answer to a tap (plus one slow pulse on the Start button) ---- */
-  button{transition:transform .12s ease-out,filter .12s ease-out,background-color .15s,box-shadow .15s;touch-action:manipulation}
-  button:active:not(:disabled){transform:scale(.95);filter:brightness(.92)}
+  /* ---- motion: every touch gets an answer ---- */
+  button{position:relative;overflow:hidden;transition:transform .32s cubic-bezier(.2,1.7,.4,1),filter .2s ease-out,background-color .18s,box-shadow .18s,color .18s;touch-action:manipulation}
+  button:active:not(:disabled){transform:scale(.94);filter:brightness(.92);transition-duration:.07s}
+  .rip{position:absolute;border-radius:50%;background:currentColor;opacity:.2;transform:scale(0);animation:rip .55s ease-out forwards;pointer-events:none}
+  @keyframes rip{to{transform:scale(1);opacity:0}}
+  .bump{animation:bump .34s cubic-bezier(.2,1.5,.4,1)}
+  @keyframes bump{0%{transform:scale(.86)}100%{transform:scale(1)}}
+  .burst{animation:burst .4s ease-out!important}
+  @keyframes burst{0%{box-shadow:0 0 0 0 rgba(255,122,85,.55)}100%{box-shadow:0 0 0 34px rgba(255,122,85,0)}}
+  .sheet.closing{animation:fadeout .19s ease-in forwards}
+  .sheet.closing>div{animation:down .19s ease-in forwards}
+  @keyframes fadeout{to{opacity:0}}
+  @keyframes down{to{transform:translateY(40px);opacity:0}}
+  .exedit.out{overflow:hidden;animation:closerow .17s ease-in forwards}
+  @keyframes closerow{from{max-height:300px;opacity:1}to{max-height:0;opacity:0;padding-bottom:0}}
+  .ex.gone{animation:gone .22s ease-in forwards}
+  @keyframes gone{to{opacity:0;transform:translateX(-36px) scale(.96)}}
+  .slideup{animation:slideup .26s cubic-bezier(.2,1.2,.4,1)}
+  .slidedown{animation:slidedown .26s cubic-bezier(.2,1.2,.4,1)}
+  @keyframes slideup{from{transform:translateY(56px)}}
+  @keyframes slidedown{from{transform:translateY(-56px)}}
+  .okmark{width:40vmin;height:40vmin;display:block;margin:0 auto}
+  .okmark circle{fill:var(--acc)}
+  .okmark path{fill:none;stroke:var(--on-acc);stroke-width:9;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:62;stroke-dashoffset:62;animation:draw .3s .12s ease-out forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  #camLog{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:var(--field);font:400 11px/1.5 ui-monospace,Menlo,monospace;color:var(--mut);white-space:pre-wrap;word-break:break-word;user-select:text;-webkit-user-select:text}
   .exhead:active:not(:disabled),.addrow:active:not(:disabled),.hrow:active:not(:disabled){transform:scale(.985);filter:brightness(1.12)}
   button.big:active:not(:disabled){transform:scale(.975)}
   #startBtn:active:not(:disabled),.stopbtn:active:not(:disabled){transform:scale(.9)}
-  .view.on{animation:viewin .24s ease-out}
-  @keyframes viewin{from{opacity:0;transform:translateY(6px)}}
+  .view.on{animation:viewin .3s cubic-bezier(.2,.9,.3,1)}
+  @keyframes viewin{from{opacity:0;transform:translateY(14px)}}
   #session.view.on{animation:fadein .24s ease-out}
   @keyframes fadein{from{opacity:0}}
   .sheet{animation:fadein .18s ease-out}
@@ -241,6 +263,13 @@
     <details class="set">
       <summary>Highlight reel<span class="chev"></span></summary>
       <div id="reelOpts" style="padding-bottom:10px"></div>
+    </details>
+    <details class="set">
+      <summary>Camera check<span class="chev"></span></summary>
+      <div style="padding-bottom:16px">
+        <pre id="camLog"></pre>
+        <button class="sm" id="camCopy">Copy</button>
+      </div>
     </details>
     <details class="set">
       <summary>Backup<span class="chev"></span></summary>
@@ -301,7 +330,7 @@
     <canvas id="overlay"></canvas>
   </div>
   <div id="hud">
-    <div><div class="t" id="hudEx"></div><div class="s" id="hudSet"></div><div id="recdot"><i></i>Recording</div><div id="dbg"></div></div>
+    <div><div class="t" id="hudEx"></div><div class="s" id="hudSet"></div><div id="recdot"><i></i>Recording</div></div>
     <div class="row"><button id="flipBtn" class="sm">Flip</button><button id="quitBtn" class="sm">Cancel</button></div>
   </div>
   <div id="big"></div>
@@ -482,9 +511,22 @@ function reelSegments(set,opt){
 }
 /*</core>*/
 
-const APP_VERSION='v13'; // shown at the bottom of the home screen
+const APP_VERSION='v15'; // shown at the bottom of the home screen
 const $=id=>document.getElementById(id);
 function replay(el,c){if(!el)return;el.classList.remove(c);void el.offsetWidth;el.classList.add(c);}
+// Sheets slide away instead of vanishing
+function closeSheet(el){
+  if(!el||el.hidden||el.classList.contains('closing')) return;
+  el.classList.add('closing'); setTimeout(()=>{el.hidden=true;el.classList.remove('closing');},190);
+}
+// Every button answers a touch with a ripple from the point it was touched (and a tiny buzz on phones that allow it)
+document.addEventListener('pointerdown',e=>{
+  const b=e.target.closest&&e.target.closest('button'); if(!b||b.disabled) return;
+  const r=b.getBoundingClientRect(), d=Math.max(r.width,r.height)*2.2, s=document.createElement('span');
+  s.className='rip'; s.style.cssText=`width:${d}px;height:${d}px;left:${e.clientX-r.left-d/2}px;top:${e.clientY-r.top-d/2}px`;
+  b.appendChild(s); setTimeout(()=>s.remove(),560);
+  try{navigator.vibrate&&navigator.vibrate(6);}catch(_){}
+},{passive:true});
 const store={
   get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},
   set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
@@ -630,8 +672,17 @@ $('home').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b||b.closest('#reelOpts')) return;   // reel options have their own handler
   const d=b.dataset;
   if(d.act!=='clear') confirmClear=null;
-  if(d.day!=null){if(+d.day!==sel){sel=+d.day;openRow=-1;setPlan();renderPlan();replay(document.querySelector('.today'),'swap');}return;}
-  if(d.open!=null){const i=+d.open;openRow=openRow===i?-1:i;justOpened=true;renderPlan();justOpened=false;return;}
+  if(d.day!=null){if(+d.day!==sel){sel=+d.day;openRow=-1;setPlan();renderPlan();replay(document.querySelector('.today'),'swap');replay(document.querySelector('.day.sel'),'bump');}return;}
+  if(d.open!=null){
+    const i=+d.open;
+    if(openRow===i){   // closing: let the panel fold away first
+      const ed=b.parentElement.querySelector('.exedit');
+      const shut=()=>{if(openRow===i){openRow=-1;renderPlan();}};
+      if(ed){ed.classList.remove('anim');ed.classList.add('out');setTimeout(shut,170);}else shut();
+      return;
+    }
+    openRow=i;justOpened=true;renderPlan();justOpened=false;return;
+  }
   if(d.f){
     lastBump={i:d.i,f:d.f};
     if(d.i==='s'){bump(settings,d.f,+d.d);store.set('rc_settings',settings);renderSettings();}
@@ -645,15 +696,22 @@ $('home').addEventListener('click',e=>{
       if(confirmClear!==key) confirmClear=key;
       else{clearHistory(key);confirmClear=null;renderHistory();}
     }
-    if(a==='del'){plan.splice(i,1);openRow=-1;}
+    if(a==='del'){   // the row slides out before it is removed
+      const li=b.closest('.ex'), item=plan[i];
+      const drop=()=>{const k=plan.indexOf(item); if(k>=0){plan.splice(k,1);openRow=-1;renderPlan();}};
+      if(li){li.classList.add('gone');setTimeout(drop,220);}else drop();
+      return;
+    }
     if(a==='up'&&i>0){[plan[i-1],plan[i]]=[plan[i],plan[i-1]];openRow=i-1;}
     if(a==='down'&&i<plan.length-1){[plan[i+1],plan[i]]=[plan[i],plan[i+1]];openRow=i+1;}
-    renderPlan();return;
+    renderPlan();
+    if(a==='up'||a==='down') replay(document.querySelectorAll('#plan .ex')[openRow],a==='up'?'slideup':'slidedown');
+    return;
   }
-  if(d.pick){plan.push(mk(d.pick));openRow=plan.length-1;$('sheet').hidden=true;justOpened=true;renderPlan();justOpened=false;return;}
+  if(d.pick){plan.push(mk(d.pick));openRow=plan.length-1;closeSheet($('sheet'));justOpened=true;renderPlan();justOpened=false;return;}
   if(d.split){
     const c=routine.cycle, i=+d.i, a=d.split;
-    if(a==='open'){$('setSheet').hidden=true;renderSplit();$('splitSheet').hidden=false;return;}
+    if(a==='open'){closeSheet($('setSheet'));renderSplit();$('splitSheet').hidden=false;return;}
     if(a==='add') c.push(null);
     if(a==='del'&&c.length>1) c.splice(i,1);
     if(a==='up'&&i>0) [c[i-1],c[i]]=[c[i],c[i-1]];
@@ -670,20 +728,21 @@ $('splitSheet').addEventListener('change',e=>{
   if(t.dataset.wk){const v=t.value.trim().slice(0,24); if(v) routine.workouts[t.dataset.wk].name=v; renderSplit();}
   saveRoutine();
 });
-$('splitDone').onclick=()=>{$('splitSheet').hidden=true;openRow=-1;setPlan();renderPlan();};
+$('splitDone').onclick=()=>{closeSheet($('splitSheet'));openRow=-1;setPlan();renderPlan();};
 $('addBtn').onclick=()=>{
   const used=new Set(plan.map(p=>p.key));
   $('picks').innerHTML=Object.entries(LIB).filter(([k])=>!used.has(k)).map(([k,v])=>`<button class="pick" data-pick="${k}"><b>${v.name}</b></button>`).join('');
   $('sheet').hidden=false;
 };
-$('sheetClose').onclick=()=>{$('sheet').hidden=true;};
-$('tabHome').onclick=()=>{sel=todayIdx();openRow=-1;setPlan();renderPlan();show('home');};
-$('tabHist').onclick=()=>{renderHistory();show('histView');};
-$('setBtn').onclick=()=>{$('setSheet').hidden=false;};
-$('setDone').onclick=()=>{$('setSheet').hidden=true;};
-$('setSheet').addEventListener('click',e=>{if(e.target===$('setSheet'))$('setSheet').hidden=true;});
+$('sheetClose').onclick=()=>{closeSheet($('sheet'));};
+$('tabHome').onclick=()=>{replay($('tabHome'),'bump');sel=todayIdx();openRow=-1;setPlan();renderPlan();show('home');};
+$('tabHist').onclick=()=>{replay($('tabHist'),'bump');renderHistory();show('histView');};
+$('setBtn').onclick=()=>{renderCamLog();$('setSheet').hidden=false;};
+$('camCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('camLog').textContent);$('camCopy').textContent='Copied';}catch(e){$('camCopy').textContent='Select the text and copy it';}};
+$('setDone').onclick=()=>{closeSheet($('setSheet'));};
+$('setSheet').addEventListener('click',e=>{if(e.target===$('setSheet'))closeSheet($('setSheet'));});
 $('history').addEventListener('click',e=>{const b=e.target.closest('[data-hist]'); if(b){backTo='histView';openWorkout(+b.dataset.hist);}});
-$('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))$('sheet').hidden=true;});
+$('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))closeSheet($('sheet'));});
 // Remove every logged set of one exercise (its "last time" numbers go with it)
 function clearHistory(key){
   const name=LIB[key].name;
@@ -751,12 +810,23 @@ const buzz=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}};
 /* ---------- CAMERA + POSE ---------- */
 const cam=$('cam'), overlay=$('overlay'), octx=overlay.getContext('2d');
 let stream=null, facing='user', landmarker=null, poseReady=false, loopOn=false, lastVT=-1, lastDetect=0;
-let bodySeen=false, dbgT=0;
-// Temporary camera read-out (small line on the recording screen) to track down the picture-size problem
+let bodySeen=false, poseHow='not loaded yet';
+// Camera check: a short log of what the phone's camera reports at each step, shown in Settings.
+// It exists to track down the picture-size problem and can be removed once that is fixed.
 function camInfo(){
   let tr={}; try{tr=stream.getVideoTracks()[0].getSettings();}catch(e){}
   const app=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
-  return `cam ${cam.videoWidth}x${cam.videoHeight} | box ${cam.clientWidth}x${cam.clientHeight} | track ${tr.width||'?'}x${tr.height||'?'} | ${app?'app':'browser'} | v${APP_VERSION.slice(1)}`;
+  return `picture ${cam.videoWidth}x${cam.videoHeight}, shown in ${cam.clientWidth}x${cam.clientHeight}, camera ${tr.width||'?'}x${tr.height||'?'}${cam.paused?', PAUSED':''}, ${app?'app':'browser'}`;
+}
+function camNote(tag){
+  const log=store.get('rc_camlog',[]);
+  log.push(tag==='rep counter'?`rep counter: ${poseHow}`:`${tag}: ${camInfo()}`);
+  store.set('rc_camlog',log.slice(-16));
+}
+const camNoteSoon=tag=>setTimeout(()=>{if(stream)camNote(tag);},900);
+function renderCamLog(){
+  const log=store.get('rc_camlog',[]);
+  $('camLog').textContent=`Version ${APP_VERSION.slice(1)}\n`+(log.length?log.join('\n'):'Nothing yet. Record two sets, then come back here.');
 }
 async function startCamera(){
   if(stream) stream.getTracks().forEach(t=>t.stop());
@@ -765,7 +835,13 @@ async function startCamera(){
   $('stage').classList.toggle('mirror',facing==='user');
 }
 let poseLoading=null;
-function loadPose(){return poseLoading||(poseLoading=loadPoseOnce().finally(()=>{if(!poseReady)poseLoading=null;}));}
+let poseTries=0;
+// If loading fails (a slow or dropped connection is the usual reason) it is tried again a few times by itself
+function loadPose(){return poseLoading||(poseLoading=loadPoseOnce().finally(()=>{
+  if(poseReady) return;
+  poseLoading=null;
+  if(++poseTries<4) setTimeout(loadPose,3000*poseTries);
+}));}
 async function loadPoseOnce(){
   if(landmarker||poseReady) return;
   setStatus('Loading rep counter…');
@@ -776,16 +852,16 @@ async function loadPoseOnce(){
     const M='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_';
     const opt=(m,d)=>({baseOptions:{modelAssetPath:`${M}${m}/float16/1/pose_landmarker_${m}.task`,delegate:d},runningMode:'VIDEO',numPoses:1,
       minPoseDetectionConfidence:0.6,minPosePresenceConfidence:0.6,minTrackingConfidence:0.6});
-    // the "full" model is steadier than "lite"; fall back to lite, then to the CPU, if it can't start
+    // same order as the versions where rep counting worked: the fuller model first, the light one as a fallback
     for(const [m,d] of [['full','GPU'],['lite','GPU'],['full','CPU'],['lite','CPU']]){
-      try{landmarker=await PoseLandmarker.createFromOptions(fs,opt(m,d));break;}catch(e){landmarker=null;}
+      try{landmarker=await PoseLandmarker.createFromOptions(fs,opt(m,d));poseHow=`${m}/${d}`;break;}catch(e){landmarker=null;poseHow='failed: '+(e&&e.message||e);}
     }
-    if(!landmarker) throw new Error('pose model failed to start');
+    if(!landmarker) throw new Error(poseHow);
     // run one throwaway detection so the first real frame is not the slow one
     try{const w=document.createElement('canvas');w.width=w.height=192;w.getContext('2d').fillRect(0,0,192,192);landmarker.detectForVideo(w,performance.now());}catch(e){}
-    poseReady=true; setStatus(''); saveForOffline();
+    poseReady=true; setStatus(''); camNote('rep counter'); saveForOffline();
   }catch(e){
-    console.error(e); setStatus('Rep counter could not load. Enter reps by hand.');
+    console.error(e); poseHow='failed: '+(e&&e.message||e); camNote('rep counter'); setStatus('Rep counter could not load. Enter reps by hand.');
   }
 }
 // Blend each new pose with the previous one so the skeleton doesn't shake
@@ -809,7 +885,6 @@ function loop(){
   if(!loopOn) return;
   requestAnimationFrame(loop);
   const now=performance.now();
-  if(now-dbgT>700){dbgT=now;$('dbg').textContent=camInfo();}
   if(!cam.videoWidth) return;
   if(overlay.width!==cam.videoWidth){overlay.width=cam.videoWidth;overlay.height=cam.videoHeight;}
   if(poseReady&&cam.currentTime!==lastVT&&now-lastDetect>60){
@@ -878,10 +953,12 @@ function pickMime(){
 $('startBtn').onclick=async()=>{
   $('homeMsg').textContent='';
   if(!curWorkout()) return;
+  replay($('startBtn'),'burst'); setTimeout(()=>$('startBtn').classList.remove('burst'),420);
   if(!plan.length){$('homeMsg').textContent='Add at least one exercise.';return;}
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$('homeMsg').textContent='Camera is not available. Open this page over https (or localhost).';return;}
   beep(1,1); // unlock audio on this tap
   try{await startCamera();}catch(e){$('homeMsg').textContent='Camera access was blocked: '+e.message;return;}
+  store.set('rc_camlog',[]); camNoteSoon('opened');
   sess={date:Date.now(),idx:sel,name:curWorkout().name,plan:plan.filter(p=>p.sets>0).map(p=>({...p})),ei:0,si:0,sets:[]};
   show('session'); loopOn=true; loop(); toReady(true);
   try{wake=await navigator.wakeLock.request('screen');}catch(e){}
@@ -897,8 +974,8 @@ $('quitBtn').onclick=()=>{
   $('quitMsg').textContent=(n?`Your ${n} saved ${n===1?'set is':'sets are'} kept.`:'No sets are saved yet.')+(phase==='confirm'?' The set you just recorded is not saved.':'');
   $('quitSheet').hidden=false;
 };
-$('quitNo').onclick=()=>{$('quitSheet').hidden=true;};
-$('quitYes').onclick=()=>{$('quitSheet').hidden=true;finish();};
+$('quitNo').onclick=()=>{closeSheet($('quitSheet'));};
+$('quitYes').onclick=()=>{closeSheet($('quitSheet'));finish();};
 function setPh(p){phase=p;$('session').dataset.phase=p;replay($('panelBody'),'swap');}
 
 function toReady(newExercise){
@@ -935,7 +1012,7 @@ function startSet(){
     recorder.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
     recorder.start(1000);
   }catch(e){recorder=null;}
-  recT0=performance.now(); setPh('rec'); beep(1320,300); buzz(200);
+  recT0=performance.now(); setPh('rec'); camNoteSoon(`set ${sess.si+1} recording`); beep(1320,300); buzz(200);
   $('recdot').style.display='flex'; showReps(0);
   setStatus(poseReady?'':'Rep counter unavailable');
   $('panelBody').innerHTML='<div class="stopwrap"><button class="stopbtn" id="endBtn" aria-label="End set"><i></i></button>End set</div>';
@@ -948,7 +1025,12 @@ function endSet(auto){
   const done=blob=>confirmSet({reps,dur,blob,auto});
   if(recorder&&recorder.state!=='inactive'){
     const type=recorder.mimeType||'video/webm';
-    recorder.onstop=()=>done(new Blob(chunks,{type}));
+    recorder.onstop=()=>{
+      done(new Blob(chunks,{type}));
+      // ask the camera to go back to its normal picture size in case recording changed it
+      try{stream.getVideoTracks()[0].applyConstraints({width:{ideal:1280},height:{ideal:720}}).catch(()=>{});}catch(e){}
+      camNoteSoon(`set ${sess.si+1} stopped`);
+    };
     recorder.stop();
   }else done(null);
 }
@@ -971,10 +1053,16 @@ function confirmSet(rec){
     sess.sets.push(saved); saveActive();
     DB.put({id:`${sess.date}-${String(sess.sets.length).padStart(3,'0')}`,...saved}).catch(()=>{sess.clipFail=true;});
     const pl=plan.find(p=>p.key===ex.key); if(pl){pl.weight=w;saveRoutine();}
-    let newEx=false;
-    if(sess.si+1<ex.sets) sess.si++; else{sess.ei++;sess.si=0;newEx=true;}
-    if(!curEx()) return finish();
-    rest(ex.rest,newEx);
+    // a tick pops up for a moment, then the rest timer (or the summary) follows
+    $('panelBody').innerHTML=''; setStatus(''); $('big').classList.remove('time');
+    $('big').innerHTML='<svg viewBox="0 0 100 100" class="okmark" aria-label="Saved" role="img"><circle cx="50" cy="50" r="46"/><path d="M30 52l14 14 27-30"/></svg>'; replay($('big'),'pop'); beep(1320,110); buzz(30);
+    setTimeout(()=>{
+      if(phase!=='confirm') return;
+      let newEx=false;
+      if(sess.si+1<ex.sets) sess.si++; else{sess.ei++;sess.si=0;newEx=true;}
+      if(!curEx()) return finish();
+      rest(ex.rest,newEx);
+    },480);
   };
 }
 function rest(sec,newEx){
@@ -1117,6 +1205,7 @@ $('reelOpts').addEventListener('click',e=>{
     if(!o[x]&&!o[y]) o[d.f]=1;
   }
   store.set('rc_settings',settings); renderReelOpts(); lastBump=null;
+  if(d.seg) replay($('reelOpts').querySelector(`[data-seg="${d.seg}"].on`),'bump');
 });
 function topSets(){
   if(settings.reel.sets==='all') return sumSets.filter(s=>s.blob&&!s.warm);

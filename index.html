@@ -284,7 +284,7 @@ const LIB = {
   dips:        {name:'Weighted dip',              joint:'elbow',    lo:100, hi:150, rest:150, w:0},
   lateral:     {name:'Lateral raise',             joint:'shoulder', lo:35,  hi:65,  rest:90,  w:7.5},
   ohtri:       {name:'Overhead cable triceps extension', joint:'elbow', lo:80, hi:145, rest:90, w:20},
-  pushdown1:   {name:'Single-arm triceps pushdown', joint:'elbow',  lo:80,  hi:145, rest:60,  w:10},
+  pushdown1:   {name:'Single-arm triceps pushdown', joint:'elbow',  lo:80,  hi:145, rest:60,  w:10, uni:true},
   // back, biceps
   pullup:      {name:'Weighted pull-up',          joint:'elbow',    lo:90,  hi:150, rest:180, w:0},
   chinup:      {name:'Chin-up',                   joint:'elbow',    lo:90,  hi:150, rest:150, w:0},
@@ -312,7 +312,7 @@ const JOINTS = {
 };
 // [pointA, pointB, refA, refB]: distance A-B measured against the reference width
 const GAPS = { wrists:[15,16,11,12], knees:[25,26,23,24] };
-const VIS = 0.6;
+const VIS = 0.65;
 function angleAt(a,b,c){
   const v1x=a.x-b.x, v1y=a.y-b.y, v2x=c.x-b.x, v2y=c.y-b.y;
   const d=Math.hypot(v1x,v1y)*Math.hypot(v2x,v2y);
@@ -337,21 +337,30 @@ function visibleParts(lm,def){
   return JOINTS[def.joint].filter(tri=>seen(lm,tri));
 }
 // One rep = leave the starting zone, reach the opposite zone, come back.
+// Built to ignore pose glitches: a wild single-frame jump is dropped, readings are median-filtered,
+// and a zone only counts once it has been held for two readings in a row.
 class RepCounter{
   constructor(lo,hi){this.lo=lo;this.hi=hi;this.reset();}
-  reset(){this.smooth=null;this.home=null;this.away=false;this.reps=[];this.leftHomeAt=null;this.lastHomeT=null;this.moveAngle=null;this.lastMoveT=null;}
-  update(angle,t){
-    this.smooth=this.smooth==null?angle:this.smooth+0.4*(angle-this.smooth);
+  reset(){this.raw=[];this.skipped=false;this.smooth=null;this.zc=null;this.run=0;this.home=null;this.away=false;this.reps=[];this.leftHomeAt=null;this.lastHomeT=null;this.moveAngle=null;this.lastMoveT=null;}
+  update(v,t){
+    const last=this.raw[this.raw.length-1];
+    if(last!=null&&Math.abs(v-last)>70&&!this.skipped){this.skipped=true;return false;}   // impossible jump: skip it once
+    this.skipped=false;
+    this.raw.push(v); if(this.raw.length>3) this.raw.shift();
+    const med=[...this.raw].sort((a,b)=>a-b)[this.raw.length>>1];
+    this.smooth=this.smooth==null?med:this.smooth+0.6*(med-this.smooth);
     const a=this.smooth; let counted=false;
     if(this.moveAngle==null||Math.abs(a-this.moveAngle)>12){this.moveAngle=a;this.lastMoveT=t;}
-    const z=a>=this.hi?'hi':a<=this.lo?'lo':null;
+    const zr=a>=this.hi?'hi':a<=this.lo?'lo':null;
+    if(zr===this.zc) this.run++; else{this.zc=zr;this.run=1;}
+    const z=zr&&this.run>=2?zr:null;
     if(z){
       if(this.home==null) this.home=z;
       if(z===this.home){
         if(this.away){
           this.away=false;
           const start=this.leftHomeAt??t;
-          if(t-start>=0.4){this.reps.push({start,end:t});counted=true;}
+          if(t-start>=0.6){this.reps.push({start,end:t});counted=true;}
         }
         this.lastHomeT=t;
       }else if(!this.away){this.away=true;this.leftHomeAt=this.lastHomeT??t;}
@@ -360,18 +369,32 @@ class RepCounter{
   }
   idleFor(t){return this.lastMoveT==null?0:t-this.lastMoveT;}
 }
-// Tracks one set. Left and right sides are counted separately and the busier side wins,
-// so one-arm exercises count correctly whichever arm is working.
+// Tracks one set. Normal exercises follow the side of the body the camera sees best, and stick with it,
+// so the hidden arm or leg (whose position the model is only guessing) cannot add reps.
+// One-arm exercises (def.uni) count each side on its own and the busier side wins.
 class SetTracker{
   constructor(def){
-    this.def=def; this.count=0;
-    this.c=def.gap?[new RepCounter(def.lo,def.hi)]:[new RepCounter(def.lo,def.hi),new RepCounter(def.lo,def.hi)];
+    this.def=def; this.count=0; this.side=-1; this.vis=[0,0];
+    const mk=()=>new RepCounter(def.lo,def.hi);
+    this.c=def.gap||!def.uni?[mk()]:[mk(),mk()];
   }
   update(lm,aspect,t){
-    if(this.def.gap){const v=gapValue(lm,GAPS[this.def.gap],aspect); if(v!=null) this.c[0].update(v,t);}
-    else JOINTS[this.def.joint].forEach((tri,i)=>{const a=sideAngle(lm,tri,aspect); if(a!=null) this.c[i].update(a,t);});
+    let tris=[];
+    if(this.def.gap){
+      const g=GAPS[this.def.gap], v=gapValue(lm,g,aspect);
+      if(v!=null){this.c[0].update(v,t);tris=[g.slice(0,2)];}
+    }else if(this.def.uni){
+      JOINTS[this.def.joint].forEach((tri,i)=>{const a=sideAngle(lm,tri,aspect); if(a!=null){this.c[i].update(a,t);tris.push(tri);}});
+    }else{
+      const T=JOINTS[this.def.joint];
+      T.forEach((tri,i)=>{const v=Math.min(...tri.map(k=>lm[k]?(lm[k].visibility??1):0)); this.vis[i]=this.side<0?v:this.vis[i]+0.2*(v-this.vis[i]);});
+      if(this.side<0) this.side=this.vis[1]>this.vis[0]?1:0;
+      else if(this.vis[1-this.side]>this.vis[this.side]+0.15) this.side=1-this.side;
+      const a=sideAngle(lm,T[this.side],aspect);
+      if(a!=null){this.c[0].update(a,t);tris=[T[this.side]];}
+    }
     const n=this.reps.length, counted=n>this.count; this.count=n;
-    return {counted,tris:visibleParts(lm,this.def)};
+    return {counted,tris};
   }
   get reps(){return this.c.reduce((a,b)=>b.reps.length>a.reps.length?b:a).reps;}
   idleFor(t){const v=this.c.filter(c=>c.lastMoveT!=null).map(c=>c.idleFor(t));return v.length?Math.min(...v):0;}
@@ -401,7 +424,7 @@ function reelSegments(set,opt){
 }
 /*</core>*/
 
-const APP_VERSION='v6'; // keep in step with VERSION in sw.js
+const APP_VERSION='v7'; // keep in step with VERSION in sw.js
 const $=id=>document.getElementById(id);
 function replay(el,c){if(!el)return;el.classList.remove(c);void el.offsetWidth;el.classList.add(c);}
 const store={
@@ -615,15 +638,27 @@ async function loadPoseOnce(){
     const V='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
     const {PoseLandmarker,FilesetResolver}=await import(V+'/vision_bundle.mjs');
     const fs=await FilesetResolver.forVisionTasks(V+'/wasm');
-    const opt=d=>({baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:d},runningMode:'VIDEO',numPoses:1});
-    try{landmarker=await PoseLandmarker.createFromOptions(fs,opt('GPU'));}
-    catch(e){landmarker=await PoseLandmarker.createFromOptions(fs,opt('CPU'));}
+    const M='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_';
+    const opt=(m,d)=>({baseOptions:{modelAssetPath:`${M}${m}/float16/1/pose_landmarker_${m}.task`,delegate:d},runningMode:'VIDEO',numPoses:1,
+      minPoseDetectionConfidence:0.6,minPosePresenceConfidence:0.6,minTrackingConfidence:0.6});
+    // the "full" model is steadier than "lite"; fall back to lite, then to the CPU, if it can't start
+    for(const [m,d] of [['full','GPU'],['lite','GPU'],['full','CPU'],['lite','CPU']]){
+      try{landmarker=await PoseLandmarker.createFromOptions(fs,opt(m,d));break;}catch(e){landmarker=null;}
+    }
+    if(!landmarker) throw new Error('pose model failed to start');
     // run one throwaway detection so the first real frame is not the slow one
     try{const w=document.createElement('canvas');w.width=w.height=192;w.getContext('2d').fillRect(0,0,192,192);landmarker.detectForVideo(w,performance.now());}catch(e){}
     poseReady=true; setStatus(''); saveForOffline();
   }catch(e){
     console.error(e); setStatus('Rep counter could not load. Enter reps by hand.');
   }
+}
+// Blend each new pose with the previous one so the skeleton doesn't shake
+let lmPrev=null, lmPrevT=0;
+function smoothPose(lm,now){
+  if(!lmPrev||now-lmPrevT>500) lmPrev=lm.map(p=>({x:p.x,y:p.y,visibility:p.visibility??1}));
+  else lmPrev=lm.map((p,i)=>{const q=lmPrev[i],a=0.6;return {x:q.x+a*(p.x-q.x),y:q.y+a*(p.y-q.y),visibility:q.visibility+a*((p.visibility??1)-q.visibility)};});
+  lmPrevT=now; return lmPrev;
 }
 const BONES=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
 function drawPose(lm,tris){
@@ -645,7 +680,7 @@ function loop(){
     lastVT=cam.currentTime; lastDetect=now;
     let res=null; try{res=landmarker.detectForVideo(cam,now);}catch(e){}
     octx.clearRect(0,0,overlay.width,overlay.height);
-    const lm=res&&res.landmarks&&res.landmarks[0];
+    const lmRaw=res&&res.landmarks&&res.landmarks[0], lm=lmRaw?smoothPose(lmRaw,now):null;
     bodySeen=!!lm;
     if(lm){
       const ex=curEx(), asp=overlay.width/overlay.height; let tris=[];

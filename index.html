@@ -11,16 +11,16 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="RepCam">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="theme-color" content="#2C2856">
+<meta name="theme-color" content="#1B1740">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://storage.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Indigo theme, lightened: mid-indigo ground, coral accent */
+  /* Indigo theme: dark indigo ground, clearly lighter cards, vivid coral accent */
   :root{
-    --bg:#2C2856;--card:#3D3876;--row:#353068;--badge:#4F4990;--line:#5A54A0;--dash:#6E68B4;--txt:#FFFFFF;--mut:#D5D1F0;
-    --acc:#FF8A6B;--on-acc:#1E1A3F;--btn:#4A448A;--field:#353068;--red:#FF6B70;--warn:#FFD7A3;
+    --bg:#1B1740;--card:#322C6B;--row:#28235A;--badge:#473F8E;--line:#4E4799;--dash:#6A63B8;--txt:#FFFFFF;--mut:#C8C3EE;
+    --acc:#FF7A55;--on-acc:#1A1638;--btn:#423B86;--field:#28235A;--red:#FF6168;--warn:#FFD39C;
     --disp:'Sora',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
     --body:'Sora',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   }
@@ -66,7 +66,7 @@
   .day.sel{background:var(--acc);color:var(--on-acc);box-shadow:none}
   .day.sel small,.day.sel span{color:var(--on-acc)}
   .day.sel small{font-weight:600} .day.sel b{font-weight:700}
-  .hero{display:flex;align-items:center;gap:18px;background:var(--card);border-radius:24px;padding:16px 20px;margin-bottom:16px}
+  .hero{display:flex;align-items:center;gap:18px;background:var(--card);border-radius:24px;padding:16px 20px;margin-bottom:16px;box-shadow:inset 0 0 0 1px #4E4799}
   .hero svg{flex:none}
   #ringArc{transition:stroke-dasharray .7s cubic-bezier(.3,.8,.3,1)}
   #heroMain{font-size:17px;font-weight:600;line-height:1.3}
@@ -78,10 +78,10 @@
   .hday{display:block;font:600 16px/1.3 var(--disp);color:var(--txt)}
   #plan{list-style:none;margin:0;padding:0}
   .ex{margin-bottom:8px}
-  .exhead{display:flex;align-items:center;gap:14px;width:100%;min-height:58px;padding:10px 16px;text-align:left;background:var(--row);border-radius:18px;font-weight:400}
+  .exhead{display:flex;align-items:center;gap:14px;width:100%;min-height:58px;padding:10px 16px;text-align:left;background:var(--row);border-radius:18px;font-weight:400;box-shadow:inset 0 0 0 1px #3A3480}
   .num{flex:none;width:30px;height:30px;border-radius:50%;background:var(--badge);color:var(--txt);display:grid;place-items:center;font:700 14px/1 var(--disp)}
   .exmain{flex:1;min-width:0}
-  .exsub{flex:none;font-size:14px;color:var(--mut);white-space:nowrap}
+  .exsub{flex:none;font-size:14px;font-weight:600;color:var(--txt);white-space:nowrap}
   .exlast{display:block;font-size:12px;color:var(--mut);margin-top:1px}
   .ex.open .exhead{background:var(--card);border-radius:18px 18px 0 0}
   .chev{flex:none;width:9px;height:9px;border-right:2px solid var(--mut);border-bottom:2px solid var(--mut);transform:rotate(45deg);margin:0 4px 4px 0;transition:transform .15s}
@@ -135,7 +135,8 @@
   #session[data-phase="rec"] #quitBtn,#session[data-phase="cd"] #quitBtn,#session[data-phase="rec"] #flipBtn,#session[data-phase="cd"] #flipBtn{display:none}
   #stage{position:absolute;inset:0;overflow:hidden}
   #stage.mirror video,#stage.mirror canvas{transform:scaleX(-1)}
-  #cam,#overlay{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover}
+  #cam,#overlay{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  #dbg{font:400 10px/1.3 ui-monospace,Menlo,monospace;color:#fff;opacity:.75;margin-top:6px}
   #hud{position:absolute;top:0;left:0;right:0;padding:calc(16px + env(safe-area-inset-top)) 18px 46px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;background:linear-gradient(#17142EB3,#17142E00)}
   #hud .t{font:700 22px/1.2 var(--disp)} #hud .s{font-size:14px;color:#D6D2EE;margin-top:2px}
   #recdot{display:none;align-items:center;gap:7px;font-weight:600;font-size:13px;color:#fff;margin-top:6px}
@@ -144,19 +145,19 @@
   #big{position:absolute;left:0;right:0;top:50%;transform:translateY(-60%);text-align:center;font:700 44vmin/1 var(--disp);letter-spacing:-.04em;color:#fff;text-shadow:0 4px 30px #17142ECC;pointer-events:none}
   #big.time{font-size:30vmin}
   #big small{display:block;font:600 5vmin/1.4 var(--disp);letter-spacing:0;color:#FFB09A}
-  #hud button{white-space:nowrap;flex:none;background:#3D3876D9}
-  #big .note{display:block;width:fit-content;margin:2.5vmin auto 0;padding:1.6vmin 3.6vmin;border-radius:99px;background:#3D3876F2;color:#fff;font:600 4.2vmin/1.2 var(--body);letter-spacing:0;text-shadow:none}
+  #hud button{white-space:nowrap;flex:none;background:#322C6BD9}
+  #big .note{display:block;width:fit-content;margin:2.5vmin auto 0;padding:1.6vmin 3.6vmin;border-radius:99px;background:#322C6BF2;color:#fff;font:600 4.2vmin/1.2 var(--body);letter-spacing:0;text-shadow:none}
   #big .note.beat{background:var(--acc);color:var(--on-acc)}
-  .lastbox{display:flex;justify-content:space-between;align-items:baseline;background:#353068F2;border-radius:16px;padding:12px 16px;margin-bottom:8px;font-size:14px;color:var(--mut)}
+  .lastbox{display:flex;justify-content:space-between;align-items:baseline;background:#28235AF2;border-radius:16px;padding:12px 16px;margin-bottom:8px;font-size:14px;color:var(--mut)}
   .lastbox b{font:600 20px/1 var(--disp);color:var(--acc)}
   #verdict{margin:10px 2px 0;font-size:14px;font-weight:600;min-height:22px}
   #verdict.up{color:var(--acc)}
   #panel{position:absolute;left:0;right:0;bottom:0;padding:60px 18px calc(22px + env(safe-area-inset-bottom));background:linear-gradient(#17142E00,#17142EC7 50%)}
   #status{font-size:14px;color:#D6D2EE;margin-bottom:8px;min-height:18px}
-  .step{display:flex;align-items:center;gap:8px;background:#353068F2;border-radius:16px;padding:6px}
+  .step{display:flex;align-items:center;gap:8px;background:#28235AF2;border-radius:16px;padding:6px}
   .step b{flex:1;text-align:center;font:600 22px/1 var(--disp)}
   .step button{width:52px;padding:10px 0;font-size:22px;border-radius:12px}
-  .skipb{flex:1;padding:13px 8px;font-size:14px;background:#4A448AD9}
+  .skipb{flex:1;padding:13px 8px;font-size:14px;background:#423B86D9}
   .lbl{font-size:13px;color:var(--mut);margin:8px 0 4px}
   .stopwrap{display:flex;flex-direction:column;align-items:center;gap:10px;font-size:15px;font-weight:600}
   .stopbtn{width:96px;height:96px;border-radius:50%;border:5px solid var(--txt);background:none;padding:0;display:grid;place-items:center}
@@ -172,7 +173,7 @@
   #reelOut video{width:100%;border-radius:18px;margin-top:10px;background:#000}
 
   /* ---- opening screen: the icon on a dark field until the app is ready ---- */
-  #splash{position:fixed;inset:0;z-index:50;background:#2C2856;display:grid;place-items:center;transition:opacity .45s ease}
+  #splash{position:fixed;inset:0;z-index:50;background:#1B1740;display:grid;place-items:center;transition:opacity .45s ease}
   #splash svg{width:36vmin;max-width:200px;animation:splashin .55s cubic-bezier(.2,.8,.3,1) both;transition:transform .45s ease}
   #splash.out{opacity:0;pointer-events:none}
   #splash.out svg{transform:scale(1.1)}
@@ -296,11 +297,11 @@
 <!-- SESSION -->
 <div id="session" class="view">
   <div id="stage" class="mirror">
-    <video id="cam" playsinline webkit-playsinline muted autoplay disablepictureinpicture disableremoteplayback></video>
+    <video id="cam" playsinline muted autoplay></video>
     <canvas id="overlay"></canvas>
   </div>
   <div id="hud">
-    <div><div class="t" id="hudEx"></div><div class="s" id="hudSet"></div><div id="recdot"><i></i>Recording</div></div>
+    <div><div class="t" id="hudEx"></div><div class="s" id="hudSet"></div><div id="recdot"><i></i>Recording</div><div id="dbg"></div></div>
     <div class="row"><button id="flipBtn" class="sm">Flip</button><button id="quitBtn" class="sm">Cancel</button></div>
   </div>
   <div id="big"></div>
@@ -481,7 +482,7 @@ function reelSegments(set,opt){
 }
 /*</core>*/
 
-const APP_VERSION='v12'; // shown at the bottom of the home screen
+const APP_VERSION='v13'; // shown at the bottom of the home screen
 const $=id=>document.getElementById(id);
 function replay(el,c){if(!el)return;el.classList.remove(c);void el.offsetWidth;el.classList.add(c);}
 const store={
@@ -750,13 +751,12 @@ const buzz=p=>{try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}};
 /* ---------- CAMERA + POSE ---------- */
 const cam=$('cam'), overlay=$('overlay'), octx=overlay.getContext('2d');
 let stream=null, facing='user', landmarker=null, poseReady=false, loopOn=false, lastVT=-1, lastDetect=0;
-let bodySeen=false;
-// The camera picture is scaled by the browser itself (object-fit: cover), which keeps its proportions.
-// If the preview stalls or shrinks after a recording, re-attaching the camera makes the browser lay it out again.
-function wakePreview(){
-  if(!stream) return;
-  try{cam.srcObject=null;cam.srcObject=stream;}catch(e){}
-  cam.play().catch(()=>{});
+let bodySeen=false, dbgT=0;
+// Temporary camera read-out (small line on the recording screen) to track down the picture-size problem
+function camInfo(){
+  let tr={}; try{tr=stream.getVideoTracks()[0].getSettings();}catch(e){}
+  const app=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+  return `cam ${cam.videoWidth}x${cam.videoHeight} | box ${cam.clientWidth}x${cam.clientHeight} | track ${tr.width||'?'}x${tr.height||'?'} | ${app?'app':'browser'} | v${APP_VERSION.slice(1)}`;
 }
 async function startCamera(){
   if(stream) stream.getTracks().forEach(t=>t.stop());
@@ -801,7 +801,7 @@ function drawPose(lm,tris){
   octx.lineWidth=Math.max(3,w/200); octx.strokeStyle='#ffffffaa';
   for(const [a,b] of BONES){const p=lm[a],q=lm[b];if((p.visibility??1)<.5||(q.visibility??1)<.5)continue;
     octx.beginPath();octx.moveTo(p.x*w,p.y*h);octx.lineTo(q.x*w,q.y*h);octx.stroke();}
-  octx.strokeStyle='#FF8A6B';octx.lineWidth=Math.max(5,w/120);
+  octx.strokeStyle='#FF7A55';octx.lineWidth=Math.max(5,w/120);
   for(const tri of tris||[]){octx.beginPath();
     tri.forEach((i,k)=>{const p=lm[i];k?octx.lineTo(p.x*w,p.y*h):octx.moveTo(p.x*w,p.y*h)});octx.stroke();}
 }
@@ -809,6 +809,7 @@ function loop(){
   if(!loopOn) return;
   requestAnimationFrame(loop);
   const now=performance.now();
+  if(now-dbgT>700){dbgT=now;$('dbg').textContent=camInfo();}
   if(!cam.videoWidth) return;
   if(overlay.width!==cam.videoWidth){overlay.width=cam.videoWidth;overlay.height=cam.videoHeight;}
   if(poseReady&&cam.currentTime!==lastVT&&now-lastDetect>60){
@@ -901,7 +902,6 @@ $('quitYes').onclick=()=>{$('quitSheet').hidden=true;finish();};
 function setPh(p){phase=p;$('session').dataset.phase=p;replay($('panelBody'),'swap');}
 
 function toReady(newExercise){
-  wakePreview();
   setPh('ready'); clearInterval(timer); hud(); showBig('');
   $('recdot').style.display='none';
   const ex=curEx();
@@ -945,7 +945,7 @@ function endSet(auto){
   if(phase!=='rec') return;
   setPh('confirm'); $('recdot').style.display='none'; beep(520,250); buzz([80,60,80]);
   const reps=counter.reps.slice(), dur=(performance.now()-recT0)/1000, ex=curEx();
-  const done=blob=>{confirmSet({reps,dur,blob,auto});wakePreview();};
+  const done=blob=>confirmSet({reps,dur,blob,auto});
   if(recorder&&recorder.state!=='inactive'){
     const type=recorder.mimeType||'video/webm';
     recorder.onstop=()=>done(new Blob(chunks,{type}));
@@ -1171,7 +1171,7 @@ $('reelBtn').onclick=async()=>{
   const sp=$('splash'), t0=performance.now(); if(!sp) return;
   const hide=()=>setTimeout(()=>{
     sp.classList.add('out');
-    const tc=document.querySelector('meta[name="theme-color"]'); if(tc) tc.content='#2C2856';
+    const tc=document.querySelector('meta[name="theme-color"]'); if(tc) tc.content='#1B1740';
     setTimeout(()=>sp.remove(),500);
   },Math.max(0,900-(performance.now()-t0)));
   // wait for the fonts (2 s at most) so the home screen doesn't shift after it appears
